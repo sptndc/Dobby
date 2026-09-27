@@ -23,8 +23,9 @@ jobs:
         run: |
           cmake -S . -B build \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_SYSTEM_PROCESSOR="${{ matrix.architecture }}" \
+            -DCMAKE_OSX_ARCHITECTURES="${{ matrix.architecture }}" \
             -DCMAKE_SYSTEM_NAME="Darwin" \
+            -DCMAKE_SYSTEM_PROCESSOR="${{ matrix.architecture }}" \
             -DFullFloatingPointRegisterPack=ON
 
       - name: Build
