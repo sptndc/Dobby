@@ -7,29 +7,36 @@
 #include "PlatformUnifiedInterface/platform.h"
 
 int GetProtectionFromMemoryPermission(MemoryPermission access) {
-  if (kReadWriteExecute == access)
-    return PAGE_EXECUTE_READWRITE;
-  else if (kReadExecute == access)
-    return PAGE_EXECUTE_READ;
+  switch (access) {
+    case kNoAccess:         return PAGE_NOACCESS;
+    case kRead:             return PAGE_READONLY;
+    case kReadWrite:        return PAGE_READWRITE;
+    case kReadWriteExecute: return PAGE_EXECUTE_READWRITE;
+    case kReadExecute:      return PAGE_EXECUTE_READ;
+  }
 }
 
 int OSMemory::AllocPageSize() {
   static int lastRet = -1;
+
   if (lastRet == -1) {
     SYSTEM_INFO si;
     GetSystemInfo(&si);
     lastRet = si.dwAllocationGranularity; // should be used with VirtualAlloc(MEM_RESERVE)
   }
+
   return lastRet;
 }
 
 int OSMemory::PageSize() {
   static int lastRet = -1;
+
   if (lastRet == -1) {
     SYSTEM_INFO si;
     GetSystemInfo(&si);
     lastRet = si.dwPageSize; // should be used with VirtualAlloc(MEM_RESERVE)
   }
+
   return lastRet;
 }
 
@@ -39,6 +46,7 @@ void *OSMemory::Allocate(void *address, int size, MemoryPermission access) {
 
   void *result = VirtualAlloc(address, size, MEM_COMMIT | MEM_RESERVE, PAGE_NOACCESS);
   OSMemory::SetPermission(result, size, kReadWriteExecute);
+
   if (result == nullptr)
     return nullptr;
 

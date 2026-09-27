@@ -1,5 +1,5 @@
 #include "UniconEmulator.h"
-#include "PlatformUnifiedInterface/MemoryAllocator.h"
+#include "MemoryAllocator/MemoryAllocator.h"
 #include "InstructionRelocation/InstructionRelocation.h"
 
 // align

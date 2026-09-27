@@ -86,10 +86,12 @@ bool ThreadInterface::Create(ThreadInterface::Delegate *delegate) {
 
   auto handle_impl = new thread_handle_t();
   auto err = pthread_create(&(handle_impl->thread), &attr, (void *(*)(void *))thread_handler_wrapper, delegate);
+
   if (err != 0) {
     ERROR_LOG("pthread create failed");
     return false;
   }
+
   this->handle = handle_impl;
   return true;
 }
@@ -111,12 +113,16 @@ bool OSThread::Start() {
 
 static int GetProtectionFromMemoryPermission(MemoryPermission access) {
   int prot = 0;
+
   if (access & MemoryPermission::kRead)
     prot |= PROT_READ;
+
   if (access & MemoryPermission::kWrite)
     prot |= PROT_WRITE;
+
   if (access & MemoryPermission::kExecute)
     prot |= PROT_EXEC;
+
   return prot;
 }
 
@@ -130,12 +136,14 @@ void *OSMemory::Allocate(size_t size, MemoryPermission access) {
 
 void *OSMemory::Allocate(size_t size, MemoryPermission access, void *fixed_address) {
   int prot = GetProtectionFromMemoryPermission(access);
-
   int flags = MAP_PRIVATE | MAP_ANONYMOUS;
+
   if (fixed_address != nullptr) {
     flags = flags | MAP_FIXED;
   }
+
   void *result = mmap(fixed_address, size, prot, flags, kMmapFd, kMmapFdOffset);
+
   if (result == MAP_FAILED)
     return nullptr;
 
@@ -162,6 +170,7 @@ bool OSMemory::SetPermission(void *address, size_t size, MemoryPermission access
 
   int prot = GetProtectionFromMemoryPermission(access);
   int ret = mprotect(address, size, prot);
+
   if (ret) {
     ERROR_LOG("OSMemory::SetPermission: %s", ((const char *)strerror(errno)));
   }

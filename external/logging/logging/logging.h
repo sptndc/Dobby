@@ -213,5 +213,5 @@ void logger_log_impl(void *logger, LogLevel level, const char *fmt, ...);
 
 #define ALWAYS_LOG(fmt, ...)                                                                                           \
   do {                                                                                                                 \
-    logger_log_impl(NULL, LOG_LEVEL_FATAL, fmt, ##__VA_ARGS__);                                                                          \
+    logger_log_impl(NULL, LOG_LEVEL_FATAL, fmt, ##__VA_ARGS__);                                                        \
   } while (0)

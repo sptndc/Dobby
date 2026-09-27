@@ -39,9 +39,11 @@ struct simple_linear_allocator_t {
     buffer = in_buffer;
     capacity = in_capacity;
     builtin_alignment = in_alignment;
+
     if (builtin_alignment == 0) {
       builtin_alignment = 1;
     }
+
     size = 0;
   }
 
@@ -135,6 +137,7 @@ struct linear_allocator_t {
         return;
 
       auto next_blk = next_block();
+
       if (!next_blk->is_freed())
         return;
 
@@ -201,8 +204,10 @@ struct linear_allocator_t {
     in_data_size = (uint32_t)ALIGN_CEIL(in_data_size, sizeof(mem_block_t));
 
     mem_block_t *freed_blk = nullptr;
+
     for (uint8_t *cursor = buffer; cursor < buffer + buffer_size;) {
       auto *block = (mem_block_t *)cursor;
+
       if (block->magic == MEM_BLOCK_FREE_MAGIC && block->data_size() >= in_data_size) {
         block->try_split(in_data_size);
         freed_blk = block;
@@ -234,6 +239,7 @@ struct linear_allocator_t {
       return;
 
     auto *block = mem_block_t::with_buf(buf);
+
     if (!block->is_used()) {
       DEBUG_LOG("free: invalid magic %p", block->magic);
       return;
@@ -251,8 +257,10 @@ struct linear_allocator_t {
     uint32_t used_block_count = 0;
     uint32_t freed_data_size = 0;
     uint32_t freed_block_count = 0;
+
     for (uint8_t *cursor = buffer; cursor < buffer + buffer_size;) {
       auto *block = (mem_block_t *)cursor;
+
       if (block->is_used()) {
         used_data_size += block->data_size();
         used_block_count++;
@@ -263,6 +271,7 @@ struct linear_allocator_t {
 
       cursor += block->block_size();
     }
+
     DEBUG_LOG("status: used_data_size=%p, used_block_count=%p, freed_data_size=%p, freed_block_count=%p",
               used_data_size, used_block_count, freed_data_size, freed_block_count);
   }

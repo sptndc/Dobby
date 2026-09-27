@@ -69,7 +69,7 @@ set(dobby.SOURCE_FILE_LIST
   source/InterceptEntry.cpp
   )
 
-if(FunctionWrapper OR DynamicBinaryInstrument)
+if (FunctionWrapper OR DynamicBinaryInstrument)
   set(dobby.SOURCE_FILE_LIST ${dobby.SOURCE_FILE_LIST}
     # closure trampoline bridge
     source/TrampolineBridge/ClosureTrampolineBridge/common_bridge_handler.cc
@@ -91,4 +91,4 @@ if(FunctionWrapper OR DynamicBinaryInstrument)
     source/UserMode/Thread/PlatformThread.cc
     source/UserMode/Thread/platform-thread-${platform1}.cc
     )
-endif()
+endif ()

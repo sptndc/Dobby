@@ -1,7 +1,7 @@
 #ifndef CORE_ASSEMBLER_ARCH_H
 #define CORE_ASSEMBLER_ARCH_H
 
-#include "src/assembler.h"
+#include "core/assembler/assembler.h"
 
 #if 0
 #if TARGET_ARCH_IA32

@@ -45,6 +45,11 @@
 #endif
 
 #ifdef __cplusplus
+#include <algorithm>
+#include <map>
+#include <string>
+#include <unordered_map>
+#include <vector>
 #include "TINYSTL/vector.h"
 #include "TINYSTL/unordered_map.h"
 #include "TINYSTL/tinystl.h"

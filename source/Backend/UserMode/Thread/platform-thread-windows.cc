@@ -1,25 +1,23 @@
 #include "PlatformThread.h"
 
-using namespace zz;
-
-int OSThread::GetCurrentProcessId() {
+int zz::OSThread::GetCurrentProcessId() {
   return 0;
 }
 
-int OSThread::GetCurrentThreadId() {
+int zz::OSThread::GetCurrentThreadId() {
   return 0;
 }
 
-OSThread::LocalStorageKey OSThread::CreateThreadLocalKey() {
+zz::OSThread::LocalStorageKey zz::OSThread::CreateThreadLocalKey() {
   return 0;
 }
 
-void OSThread::DeleteThreadLocalKey(LocalStorageKey key) {
+void zz::OSThread::DeleteThreadLocalKey(LocalStorageKey key) {
 }
 
-void *OSThread::GetThreadLocal(LocalStorageKey key) {
+void *zz::OSThread::GetThreadLocal(LocalStorageKey key) {
   return NULL;
 }
 
-void OSThread::SetThreadLocal(LocalStorageKey key, void *value) {
+void zz::OSThread::SetThreadLocal(LocalStorageKey key, void *value) {
 }

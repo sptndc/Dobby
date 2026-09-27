@@ -24,6 +24,7 @@ struct InterceptRouting {
       // TODO: free code block
       delete trampoline;
     }
+
     if (near_trampoline) {
       // TODO: free code block
       delete near_trampoline;
@@ -32,8 +33,10 @@ struct InterceptRouting {
 
   virtual void Prepare() {
   }
+
   virtual void DispatchRouting() {
   }
+
   void Commit() {
   }
 
@@ -45,23 +48,30 @@ struct InterceptRouting {
   addr_t trampoline_addr() {
     if (near_trampoline)
       return near_trampoline->addr();
+
     return trampoline->addr();
   }
 
   size_t trampoline_size() {
     if (near_trampoline)
       return near_trampoline->size();
+
     return trampoline->size();
   }
 
   virtual void Active() {
     __FUNC_CALL_TRACE__();
+
     auto ret = DobbyCodePatch((void *)entry->addr, (uint8_t *)trampoline_addr(), trampoline_size());
     error |= (ret != 0);
+
+    if (!error)
+      entry->is_commited = true;
   }
 
   bool GenerateTrampoline() {
     __FUNC_CALL_TRACE__();
+
     addr_t from = entry->addr;
     features::arm_thumb_fix_addr(from);
 
@@ -79,11 +89,13 @@ struct InterceptRouting {
     if (!near_trampoline) {
       trampoline = GenerateNormalTrampolineBuffer(from, to);
     }
+
     return true;
   }
 
   void GenerateRelocatedCode() {
     __FUNC_CALL_TRACE__();
+
     if (trampoline_addr() == 0) {
       ERROR_LOG("GenerateTrampoline must be called first");
       error = 1;
@@ -95,13 +107,16 @@ struct InterceptRouting {
     auto origin = CodeMemBlock(code_addr, preferred_size);
     auto relocated = CodeMemBlock(0, 0);
     GenRelocateCodeAndBranch((void *)code_addr, &origin, &relocated);
+
     if (relocated.size == 0) {
       error = 1;
       return;
     }
-    DEBUG_LOG("origin: %p, size: %d", origin.addr(), origin.size);
+
+    DEBUG_LOG("[x86 relo] origin: %p, size: %d", origin.addr(), origin.size);
     debug_hex_log_buffer((uint8_t *)origin.addr(), origin.size);
-    DEBUG_LOG("relocated: %p, size: %d", relocated.addr(), relocated.size);
+
+    DEBUG_LOG("[x86 relo] relocated: %p, size: %d", relocated.addr(), relocated.size);
     debug_hex_log_buffer((uint8_t *)relocated.addr(), relocated.size);
 
     entry->patched = origin;

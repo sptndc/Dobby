@@ -1,7 +1,7 @@
 #ifndef CORE_ARCH_CPU_X86_H
 #define CORE_ARCH_CPU_X86_H
 
-#include "core/arch/Cpu.h"
+#include "core/arch/CpuRegister.h"
 
 class X86CpuInfo {
 

@@ -25,12 +25,12 @@ Trampoline *GenerateNormalTrampolineBuffer(addr_t from, addr_t to) {
     tramp_type = TRAMPOLINE_ARM64_ADRP_ADD_BR;
     _ AdrpAdd(TMP_REG_0, from, to);
     _ br(TMP_REG_0);
-    DEBUG_LOG("[trampoline] use [adrp, add, br]");
+    DEBUG_LOG("[arm64 trampoline] use [adrp, add, br]");
   } else {
     tramp_type = TRAMPOLINE_ARM64_LDR_BR;
     CodeGen codegen(&turbo_assembler_);
     codegen.LiteralLdrBranch((uint64_t)to);
-    DEBUG_LOG("[trampoline] use [ldr, br, #label]");
+    DEBUG_LOG("[arm64 trampoline] use [ldr, br, #label]");
   }
 
   // bind all labels
@@ -39,7 +39,7 @@ Trampoline *GenerateNormalTrampolineBuffer(addr_t from, addr_t to) {
   auto tramp_buffer = turbo_assembler_.code_buffer();
   auto tramp_block = tramp_buffer->dup();
   auto tramp = new Trampoline(tramp_type, tramp_block);
-  DEBUG_LOG("[trampoline] trampoline addr: %p(temp), %p(real), size: %d", tramp->addr(), from, tramp->size());
+  DEBUG_LOG("[arm64 trampoline] trampoline addr: %p(temp), %p(real), size: %d", tramp->addr(), from, tramp->size());
   debug_hex_log_buffer((uint8_t *)tramp->addr(), tramp->size());
   return tramp;
 }

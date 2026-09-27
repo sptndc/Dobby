@@ -1,4 +1,5 @@
 #include "platform_detect_macro.h"
+
 #if defined(TARGET_ARCH_IA32) || defined(TARGET_ARCH_X64)
 
 #include "x86_insn_decode.h"
@@ -46,11 +47,14 @@
 #define OP_EMPTY_8 OP_EMPTY_4, OP_EMPTY_4
 #endif
 
-#define op3_flag(x, f, o0, o1, o2)                                                                                     \
-  {                                                                                                                    \
-    .name = #x, .flags = (f), .operands[0] = {.data = #o0}, .operands[1] = {.data = #o1},                              \
-    .operands[2] = {.data = #o2},                                                                                      \
+#define op3_flag(x, f, o0, o1, o2) {                                                                                   \
+    .name = #x, .flags = (f), .operands = {                                                                            \
+      {.data = #o0},                                                                                                   \
+      {.data = #o1},                                                                                                   \
+      {.data = #o2}                                                                                                    \
+    }                                                                                                                  \
   }
+
 #define op2_flag(x, f, o0, o1) op3_flag(x, f, o0, o1, __)
 #define op1_flag(x, f, o0) op2_flag(x, f, o0, __)
 #define op0_flag(x, f) op1_flag(x, f, __)
@@ -70,6 +74,7 @@
   _(1) _(1a) _(2) _(3) _(4) _(5) _(6) _(7) _(8) _(9) _(10) _(11) _(12) _(13) _(14) _(15) _(16) _(p)
 #define foreach_x86_insn_sse_group                                                                                     \
   _(10) _(28) _(50) _(58) _(60) _(68) _(70) _(78) _(c0) _(d0) _(d8) _(e0) _(e8) _(f0) _(f8)
+
 enum {
   X86_INSN_GROUP_START = 0,
 
@@ -101,11 +106,13 @@ enum {
 
 // clang-format off
 
-#define foreach_x86_operand_combine(x, op1_type, op2_type)  op2(x, Eb, Gb), op2(x, Ev, Gv), op2(x, Gb, Eb), op2(x, Gv, Ev), op2(x, AL, Ib), op2(x, AX, Iz)
+#define foreach_x86_operand_combine(x, op1_type, op2_type)                                                              \
+  op2(x, Eb, Gb), op2(x, Ev, Gv), op2(x, Gb, Eb), op2(x, Gv, Ev), op2(x, AL, Ib), op2(x, AX, Iz)
 
 #define foreach_x86_gp_reg _(AX) _(CX) _(DX) _(BX) _(SP) _(BP) _(SI) _(DI)
 
-#define foreach_x86_condition _(o) _(no) _(b) _(nb) _(z) _(nz) _(be) _(nbe) _(s) _(ns) _(p) _(np) _(l) _(nl) _(le) _(nle)
+#define foreach_x86_condition                                                                                           \
+  _(o) _(no) _(b) _(nb) _(z) _(nz) _(be) _(nbe) _(s) _(ns) _(p) _(np) _(l) _(nl) _(le) _(nle)
 
 // clang-format on
 
@@ -126,6 +133,7 @@ static x86_insn_prefix_t x86_insn_decode_prefix(x86_insn_reader_t *rd, x86_insn_
    * because an REX prefix is required to immediately preceed the opcode.
    */
   x86_insn_prefix_t insn_prefix = 0;
+
   for (;;) {
     uint8_t c = peek_byte(rd);
     x86_insn_prefix_t t = 0;
@@ -181,6 +189,7 @@ static x86_insn_prefix_t x86_insn_decode_prefix(x86_insn_reader_t *rd, x86_insn_
       t = INSN_PREFIX_ADDRESS_SIZE;
       break;
     }
+
     if (t == 0)
       break;
 
@@ -194,6 +203,7 @@ static x86_insn_prefix_t x86_insn_decode_prefix(x86_insn_reader_t *rd, x86_insn_
 
 int x86_insn_has_modrm_byte(x86_insn_spec_t *insn) {
   int i;
+
   for (i = 0; i < sizeof(insn->operands) / sizeof(x86_insn_operand_spec_t); i++)
     switch (insn->operands[i].code) {
     case 'G':
@@ -202,11 +212,13 @@ int x86_insn_has_modrm_byte(x86_insn_spec_t *insn) {
     case 'R':
       return 1;
     }
-  return 0;
+
+    return 0;
 }
 
 int x86_insn_immediate_type(x86_insn_spec_t *insn) {
   int i;
+
   for (i = 0; i < sizeof(insn->operands); i++) {
     switch (insn->operands[i].code) {
     case 'J':
@@ -215,11 +227,13 @@ int x86_insn_immediate_type(x86_insn_spec_t *insn) {
       return insn->operands[i].type;
     }
   }
+
   return 0;
 }
 
 int x86_insn_has_immediate(x86_insn_spec_t *insn) {
   int i;
+
   for (i = 0; i < sizeof(insn->operands) / sizeof(x86_insn_operand_spec_t); i++) {
     switch (insn->operands[i].code) {
     case 'J':
@@ -228,11 +242,13 @@ int x86_insn_has_immediate(x86_insn_spec_t *insn) {
       return 1;
     }
   }
+
   return 0;
 }
 
 static uint8_t *x86_insn_decode_number(x86_insn_reader_t *rd, uint8_t number_bits, int64_t *out_number) {
   int64_t disp = 0;
+
   switch (number_bits) {
   case 64:
     disp = read_uint64(rd);
@@ -280,6 +296,7 @@ void x86_insn_decode_modrm_sib(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x
   insn->flags |= X86_INSN_DECODE_FLAG_IS_ADDRESS;
 
   uint8_t effective_address_bits;
+
   if (conf->mode == 64)
     effective_address_bits = (insn->prefix & INSN_PREFIX_ADDRESS_SIZE) ? 32 : 64;
   else if (conf->mode == 32)
@@ -308,6 +325,7 @@ void x86_insn_decode_modrm_sib(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x
     }
 
     uint8_t has_sib = 0;
+
     if ((rm & 7) == 4) {
       ASSERT(modrm.rm == (rm & 7));
       has_sib = 1;
@@ -343,6 +361,7 @@ void x86_insn_decode_modrm_sib(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x
           if (mod == 0) {
             mem_op->mem.base = RNone;
           }
+
           if (mod == 1) {
             disp_bits = 8;
           } else {
@@ -361,6 +380,7 @@ void x86_insn_decode_modrm_sib(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x
           if (mod == 0) {
             mem_op->mem.base = RNone;
           }
+
           if (mod == 1) {
             disp_bits = 8;
           } else {
@@ -380,6 +400,7 @@ void x86_insn_decode_modrm_sib(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x
         disp_bits = 16;
         break;
       }
+
       /* fall through */
     case 1:
     case 2:
@@ -390,25 +411,21 @@ void x86_insn_decode_modrm_sib(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x
         mem_op->mem.index = X86_INSN_GP_REG_SI + (modrm.rm & 1);
         insn->flags |= X86_INSN_DECODE_FLAG_HAS_BASE | X86_INSN_DECODE_FLAG_HAS_INDEX;
         break;
-
       case 2: /* [bp + si/di] */
       case 3:
         mem_op->mem.base = X86_INSN_GP_REG_BP;
         mem_op->mem.index = X86_INSN_GP_REG_SI + (modrm.rm & 1);
         insn->flags |= X86_INSN_DECODE_FLAG_HAS_BASE | X86_INSN_DECODE_FLAG_HAS_INDEX;
         break;
-
       case 4: /* [si/di] */
       case 5:
         mem_op->mem.base = X86_INSN_GP_REG_SI + (modrm.rm & 1);
         insn->flags |= X86_INSN_DECODE_FLAG_HAS_BASE;
         break;
-
       case 6: /* [bp + disp] */
         mem_op->mem.base = X86_INSN_GP_REG_BP;
         insn->flags |= X86_INSN_DECODE_FLAG_HAS_BASE;
         break;
-
       case 7: /* [bx + disp] */
         mem_op->mem.base = X86_INSN_GP_REG_BX;
         insn->flags |= X86_INSN_DECODE_FLAG_HAS_BASE;
@@ -417,6 +434,7 @@ void x86_insn_decode_modrm_sib(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x
 
       if (modrm.mode != 0)
         disp_bits = modrm.mode == 1 ? 8 : 16;
+
       break;
     }
   }
@@ -436,8 +454,8 @@ void x86_insn_decode_modrm_sib(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x
  */
 static void x86_insn_decode_opcode(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x86_options_t *conf) {
   uint8_t opcode = read_byte(rd);
-
   x86_insn_spec_t insn_spec;
+
   if (opcode == 0x0f) {
     opcode = read_byte(rd);
     insn_spec = x86_opcode_map_two_byte[opcode];
@@ -445,9 +463,24 @@ static void x86_insn_decode_opcode(x86_insn_reader_t *rd, x86_insn_decode_t *ins
     insn_spec = x86_opcode_map_one_byte[opcode];
   }
 
+  DEBUG_LOG("[x86 decode] spec; opcode: %x; name: %s; flags: %d", opcode, insn_spec.name, insn_spec.flags);
+
   // check sse group
   if (X86_INSN_FLAG_GET_GROUP(insn_spec.flags) > X86_INSN_SSE_GROUP_START) {
-    UNIMPLEMENTED();
+    int group_ndx = X86_INSN_FLAG_GET_SSE_GROUP(insn_spec.flags);
+
+    x86_insn_modrm_t modrm;
+    modrm.byte = peek_byte(rd);
+    int insn_ndx = modrm.reg;
+
+    x86_insn_spec_t *group_insn = NULL;
+    group_insn = &x86_insn_sse_groups_repz[group_ndx].insns[insn_ndx];
+
+    insn_spec.name = group_insn->name;
+    insn_spec.flags = group_insn->flags;
+
+    DEBUG_LOG("[x86 sse decode] modrm_group_spec; group: %d, ins: %d, byte: %x; name: %s; flags: %d", group_ndx,
+              insn_ndx, modrm.byte, insn_spec.name, insn_spec.flags);
   }
 
   if (X86_INSN_FLAG_GET_GROUP(insn_spec.flags) > X86_INSN_GROUP_START &&
@@ -467,6 +500,9 @@ static void x86_insn_decode_opcode(x86_insn_reader_t *rd, x86_insn_decode_t *ins
     // update the insn spec
     insn_spec.name = group_insn->name;
     insn_spec.flags = group_insn->flags;
+
+    DEBUG_LOG("[x86 decode] modrm_group_spec; group: %d, ins: %d, byte: %x; name: %s; flags: %d", group_ndx, insn_ndx,
+              modrm.byte, insn_spec.name, insn_spec.flags);
   }
 
   insn->primary_opcode = opcode;
@@ -488,17 +524,16 @@ uint8_t x86_insn_imm_bits(x86_insn_spec_t *insn, uint8_t operand_bits) {
   case 'q':
     imm_bits = 64;
     break;
-
   case 'z':
     imm_bits = operand_bits;
+
     if (imm_bits == 64)
       imm_bits = 32;
-    break;
 
+    break;
   case 'v':
     imm_bits = operand_bits;
     break;
-
   default:
     imm_bits = 0;
     break;
@@ -509,9 +544,11 @@ uint8_t x86_insn_imm_bits(x86_insn_spec_t *insn, uint8_t operand_bits) {
 
 void x86_insn_decode_immediate(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x86_options_t *conf) {
   uint8_t effective_operand_bits;
+
   if (conf->mode == 64 || conf->mode == 32) {
     effective_operand_bits = (insn->prefix & INSN_PREFIX_OPERAND_SIZE) ? 16 : 32;
   }
+
   effective_operand_bits = (insn->prefix & INSN_PREFIX_OPERAND_SIZE) ? 16 : 32;
 
   if (insn->flags & X86_INSN_DECODE_FLAG_OPERAND_SIZE_64)
@@ -520,8 +557,13 @@ void x86_insn_decode_immediate(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x
   if (conf->mode == 64 && insn->insn_spec.flags & X86_INSN_SPEC_DEFAULT_64_BIT)
     effective_operand_bits = 64;
 
+  DEBUG_LOG("[x86 decode] effective_operand_bits: %d", effective_operand_bits);
+
   int64_t immediate = 0;
   uint8_t imm_bits = x86_insn_imm_bits(&insn->insn_spec, effective_operand_bits);
+
+  DEBUG_LOG("[x86 decode] immediate bits: %d", imm_bits);
+
   if (imm_bits == 0)
     return;
 
@@ -530,6 +572,8 @@ void x86_insn_decode_immediate(x86_insn_reader_t *rd, x86_insn_decode_t *insn, x
 
   x86_insn_decode_number(rd, imm_bits, &immediate);
   insn->immediate = immediate;
+
+  DEBUG_LOG("[x86 decode] imm_offs: %p, imm: %p", insn->immediate_offset, insn->immediate);
 }
 
 void x86_insn_decode(x86_insn_decode_t *insn, uint8_t *buffer, x86_options_t *conf) {
@@ -554,7 +598,7 @@ void x86_insn_decode(x86_insn_decode_t *insn, uint8_t *buffer, x86_options_t *co
   }
 
 #if 1
-  DEBUG_LOG("[x86 insn] %s", insn->insn_spec.name);
+  DEBUG_LOG("[x86 insn] opcode: %s, spec: %p, size: %d", insn->insn_spec.name, &insn->insn_spec, insn->length);
 #endif
 
   // set insn length

@@ -26,6 +26,7 @@ struct AssemblerCodeBuilder {
 #endif
 
       auto block = gMemoryAllocator.allocExecBlock(buffer_size);
+
       if (block.addr() == 0)
         return MemBlock{};
 

@@ -25,8 +25,15 @@
 #define __DYLD_CACHE_FORMAT__
 
 #include <stdint.h>
-#include <uuid/uuid.h>
+#include <Availability.h>
 #include <TargetConditionals.h>
+
+#if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 150400) \
+  || (defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180400)
+#include <mach-o/fixup-chains.h>
+#else
+#include <uuid/uuid.h>
+#endif
 
 
 struct dyld_cache_header
@@ -65,7 +72,13 @@ struct dyld_cache_header
                 simulator              : 1,  // for simulator of specified platform
                 locallyBuiltCache      : 1,  // 0 for B&I built cache, 1 for locally built cache
                 builtFromChainedFixups : 1,  // some dylib in cache was built using chained fixups, so patch tables must be used for overrides
+#if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 150400) \
+  || (defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180400)
+                newFormatTLVs          : 1,  // TLVs have been set by cache builder as new format (not needing runtime side table)
+                padding                : 19; // TBD
+#else
                 padding                : 20; // TBD
+#endif
     uint64_t    sharedRegionStart;      // base load address of cache if not slid
     uint64_t    sharedRegionSize;       // overall size required to map the cache and all subCaches, if any
     uint64_t    maxSlide;               // runtime slide of cache can be between zero and this value
@@ -106,6 +119,15 @@ struct dyld_cache_header
     uint64_t    cacheAtlasSize;         // size of embedded cache atlas
     uint64_t    dynamicDataOffset;      // VM offset from cache_header* to the location of dyld_cache_dynamic_data_header
     uint64_t    dynamicDataMaxSize;     // maximum size of space reserved from dynamic data
+#if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 150400) \
+  || (defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180400)
+    uint32_t    tproMappingsOffset;     // file offset to first dyld_cache_tpro_mapping_info
+    uint32_t    tproMappingsCount;      // number of dyld_cache_tpro_mapping_info entries
+    uint64_t    functionVariantInfoAddr;// (unslid) address of dyld_cache_function_variant_info
+    uint64_t    functionVariantInfoSize;// Size of all of the variant information pointed to via the dyld_cache_function_variant_info
+    uint64_t    prewarmingDataOffset;   // file offset to dyld_prewarming_header
+    uint64_t    prewarmingDataSize;     // byte size of prewarming data
+#endif
 };
 
 // Uncomment this and check the build errors for the current mapping offset to check against when adding new fields.
@@ -127,6 +149,11 @@ enum {
     DYLD_CACHE_MAPPING_CONST_DATA           = 1 << 2U,
     DYLD_CACHE_MAPPING_TEXT_STUBS           = 1 << 3U,
     DYLD_CACHE_DYNAMIC_CONFIG_DATA          = 1 << 4U,
+#if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 150400) \
+  || (defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180400)
+    DYLD_CACHE_READ_ONLY_DATA               = 1 << 5U,
+    DYLD_CACHE_MAPPING_CONST_TPRO_DATA      = 1 << 6U,
+#endif
 };
 
 struct dyld_cache_mapping_and_slide_info {
@@ -139,6 +166,14 @@ struct dyld_cache_mapping_and_slide_info {
     uint32_t    maxProt;
     uint32_t    initProt;
 };
+
+#if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 150400) \
+  || (defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180400)
+struct dyld_cache_tpro_mapping_info {
+    uint64_t    unslidAddress;
+    uint64_t    size;
+};
+#endif
 
 struct dyld_cache_image_info
 {
@@ -203,7 +238,12 @@ struct dyld_cache_accelerator_dof
 
 struct dyld_cache_image_text_info
 {
+#if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 150400) \
+  || (defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180400)
+    uint8_t     uuid[16];
+#else
     uuid_t      uuid;
+#endif
     uint64_t    loadAddress;            // unslid address of start of __TEXT
     uint32_t    textSegmentSize;
     uint32_t    pathOffset;             // offset from start of cache file
@@ -476,6 +516,68 @@ struct dyld_cache_slide_info4
 #define DYLD_CACHE_SLIDE4_PAGE_EXTRA_END           0x8000  // last chain entry for page
 
 
+
+#if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 150400) \
+  || (defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180400)
+// The version 5 of the slide info uses a different compression scheme. Since
+// only interior pointers (pointers that point within the cache) are rebased
+// (slid), we know the possible range of the pointers and thus know there are
+// unused bits in each pointer.  We use those bits to form a linked list of
+// locations needing rebasing in each page.
+//
+// Definitions:
+//
+//  pageIndex = (pageAddress - startOfAllDataAddress)/info->page_size
+//  pageStarts[] = info + info->page_starts_offset
+//
+// There are two cases:
+//
+// 1) pageStarts[pageIndex] == DYLD_CACHE_SLIDE_V5_PAGE_ATTR_NO_REBASE
+//    The page contains no values that need rebasing.
+//
+// 2) otherwise...
+//    All rebase locations are in one linked list. The offset of the first
+//    rebase location in the page is pageStarts[pageIndex].
+//
+// A pointer is one of of the variants in dyld_cache_slide_pointer5
+//
+// The code for processing a linked list (chain) is:
+//
+//    uint32_t delta = pageStarts[pageIndex];
+//    dyld_cache_slide_pointer5* loc = pageStart;
+//    do {
+//        loc += delta;
+//        delta = loc->offsetToNextPointer;
+//        newValue = loc->regular.target + value_add + results->slide;
+//        if ( loc->auth.authenticated ) {
+//            newValue = sign_using_the_various_bits(newValue);
+//        }
+//        else {
+//            newValue = newValue | (loc->regular.high8 < 56);
+//        }
+//        loc->raw = newValue;
+//    } while (delta != 0);
+//
+//
+struct dyld_cache_slide_info5
+{
+    uint32_t    version;            // currently 5
+    uint32_t    page_size;          // currently 4096 (may also be 16384)
+    uint32_t    page_starts_count;
+    uint64_t    value_add;
+    uint16_t    page_starts[/* page_starts_count */];
+};
+
+#define DYLD_CACHE_SLIDE_V5_PAGE_ATTR_NO_REBASE    0xFFFF    // page has no rebasing
+
+union dyld_cache_slide_pointer5
+{
+    uint64_t                                                raw;
+    struct dyld_chained_ptr_arm64e_shared_cache_rebase      regular;
+    struct dyld_chained_ptr_arm64e_shared_cache_auth_rebase auth;
+};
+#endif
+
 struct dyld_cache_local_symbols_info
 {
     uint32_t    nlistOffset;        // offset into this chunk of nlist entries
@@ -513,6 +615,48 @@ struct dyld_subcache_entry
     char        fileSuffix[32];     // The file name suffix of the subCache file e.g. ".25.data", ".03.development"
 };
 
+#if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 150400) \
+  || (defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180400)
+struct dyld_cache_function_variant_entry
+{
+    uint64_t    fixupLocVmAddr;             // location of pointer that needs to be re-bound (unslid)
+    uint64_t    functionVariantTableVmAddr; // location of FunctionVariants in LINKEDIT (unslid)
+    uint64_t    dylibHeaderVmAddr;          // location of mach_heaer of dylib that implements this function variant
+    uint32_t    variantIndex        : 12,   // index into FunctionVariants (target of this fixup)
+                pacAuth             :  1,   // PAC signed or not
+                pacAddress          :  1,
+                pacKey              :  2,
+                pacDiversity        : 16;
+    uint16_t    targetDylibIndex;             // which dylib has the function variant
+    uint16_t    functionVariantTableSizeDiv4; // size of FunctionVariants in LINKEDIT (unslid) divided by 4 
+};
+
+struct dyld_cache_function_variant_info
+{
+    uint32_t                                    version;              // == 1 for now
+    uint32_t                                    count;                // number of elements in entries array
+    struct dyld_cache_function_variant_entry    entries[0];
+};
+
+#define DYLD_CACHE_PREWARMING_DATA_PAGE_SIZE    0x4000    // 16k pages
+
+// Prewarming data entries for hot pages
+struct dyld_prewarming_entry
+{
+    uint64_t cacheVMOffset : 40;    // up to 1TB caches
+    uint64_t numPages : 24;         // assumes 16k pages (DYLD_CACHE_PREWARMING_DATA_PAGE_SIZE)
+};
+
+// Prewarming data header for hot pages
+struct dyld_prewarming_header
+{
+    uint32_t version;
+    uint32_t count;
+
+    // Followed by an array of dyld_prewarming_entry
+    struct dyld_prewarming_entry entries[0];
+};
+#else
 // This struct is a small piece of dynamic data that can be included in the shared region, and contains configuration
 // data about the shared cache in use by the process. It is located
 struct dyld_cache_dynamic_data_header
@@ -521,6 +665,7 @@ struct dyld_cache_dynamic_data_header
     uint64_t    fsId;                   // The fsid_t of the shared cache being used by a process
     uint64_t    fsObjId;                // The fs_obj_id_t of the shared cache being used by a process
 };
+#endif
 
 // This is the  location of the macOS shared cache on macOS 11.0 and later
 #define MACOSX_MRM_DYLD_SHARED_CACHE_DIR   "/System/Library/dyld/"
@@ -532,6 +677,11 @@ struct dyld_cache_dynamic_data_header
 
 #define DRIVERKIT_DYLD_SHARED_CACHE_DIR   "/System/DriverKit/System/Library/dyld/"
 
+#if (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 150400) \
+  || (defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180400)
+#define EXCLAVEKIT_DYLD_SHARED_CACHE_DIR   "/System/ExclaveKit/System/Library/dyld/"
+#endif
+
 #if !TARGET_OS_SIMULATOR
   #define DYLD_SHARED_CACHE_BASE_NAME        "dyld_shared_cache_"
 #else
@@ -539,7 +689,10 @@ struct dyld_cache_dynamic_data_header
 #endif
 #define DYLD_SHARED_CACHE_DEVELOPMENT_EXT  ".development"
 
+#if !(defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 150400) \
+  || !(defined(__IPHONE_OS_VERSION_MIN_REQUIRED) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 180400)
 #define DYLD_SHARED_CACHE_DYNAMIC_DATA_MAGIC    "dyld_data    v0"
+#endif
 
 static const char* cryptexPrefixes[] = {
     "/System/Volumes/Preboot/Cryptexes/OS/",
@@ -556,5 +709,3 @@ static const uint64_t kDyldSharedCacheTypeUniversal = 2;
 
 
 #endif // __DYLD_CACHE_FORMAT__
-
-

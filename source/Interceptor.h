@@ -8,6 +8,7 @@
 typedef enum { kFunctionInlineHook, kInstructionInstrument } InterceptRoutingType;
 
 struct InterceptRouting;
+
 struct Interceptor {
   struct Entry {
     uint32_t id = 0;
@@ -28,6 +29,8 @@ struct Interceptor {
     InterceptRouting *routing;
 
     uint8_t *origin_code_ = 0;
+
+    bool is_commited;
 
     Entry(addr_t addr) {
       this->addr = addr;
@@ -56,9 +59,10 @@ struct Interceptor {
     }
   };
 
-  stl::vector<Entry *> entries;
+  std::vector<Entry *> entries;
 
   static Interceptor *Shared();
+  static Interceptor *SharedOriginal();
 
   Entry *find(addr_t addr) {
     for (auto *entry : entries) {
@@ -66,17 +70,20 @@ struct Interceptor {
         return entry;
       }
     }
+
     return nullptr;
   }
 
   Entry *remove(addr_t addr) {
     for (auto iter = entries.begin(); iter != entries.end(); iter++) {
       Entry *entry = *iter;
+
       if (entry->patched.addr() == addr) {
         entries.erase(iter);
         return entry;
       }
     }
+
     return nullptr;
   }
 
@@ -94,7 +101,12 @@ struct Interceptor {
 };
 
 inline static Interceptor gInterceptor;
+inline static Interceptor gOrigInterceptor;
 
 inline Interceptor *Interceptor::Shared() {
   return &gInterceptor;
+}
+
+inline Interceptor *Interceptor::SharedOriginal() {
+  return &gOrigInterceptor;
 }

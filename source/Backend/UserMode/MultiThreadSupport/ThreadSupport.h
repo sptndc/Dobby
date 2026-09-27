@@ -1,9 +1,6 @@
 #ifndef USER_MODE_MULTI_THREAD_SUPPORT_H
 #define USER_MODE_MULTI_THREAD_SUPPORT_H
 
-#include <vector>
-#include <map>
-
 #include "dobby/dobby_internal.h"
 
 #include "Backend/UserMode/Thread/PlatformThread.h"
@@ -18,7 +15,7 @@ typedef struct _StackFrame {
 
 // (thead) CallStack base in thread
 typedef struct _CallStack {
-  stl::vector<StackFrame *> stackframes;
+  std::vector<StackFrame *> stackframes;
 } CallStack;
 
 // ThreadSupport base on vm_core, support mutipl platforms.
@@ -48,9 +45,11 @@ public:
     std::map<char *, void *> kv_context = stackframe->kv_context;
     std::map<char *, void *>::iterator it;
     it = kv_context.find(key);
+
     if (it != kv_context.end()) {
       return (void *)it->second;
     }
+
     return NULL;
   };
 

@@ -15,7 +15,7 @@ struct ExternalReference {
 struct AssemblerBase {
   addr_t fixed_addr;
   CodeMemBuffer code_buffer_;
-  stl::vector<RelocDataLabel *> data_labels;
+  std::vector<RelocDataLabel *> data_labels;
 
   explicit AssemblerBase(addr_t fixed_addr) {
     this->fixed_addr = fixed_addr;
@@ -45,6 +45,7 @@ struct AssemblerBase {
 
   void bindLabel(PseudoLabel *label) {
     label->bind_to(pc_offset());
+
     if (label->has_confused_instructions()) {
       label->link_confused_instructions(&code_buffer_);
     }
@@ -57,5 +58,4 @@ struct AssemblerBase {
     }
   }
 };
-
 } // namespace zz

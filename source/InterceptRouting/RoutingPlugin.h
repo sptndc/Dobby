@@ -19,7 +19,7 @@ struct RoutingPluginManager {
     RoutingPluginManager::plugins.push_back(plugin);
   }
 
-  inline static stl::vector<RoutingPluginInterface *> plugins;
+  inline static std::vector<RoutingPluginInterface *> plugins;
 
   inline static RoutingPluginInterface *near_branch_trampoline;
 };

@@ -1,3 +1,3 @@
-macro(SET_OPTION option value)
+macro (SET_OPTION option value)
     set(${option} ${value} CACHE INTERNAL "" FORCE)
-endmacro()
+endmacro ()

@@ -11,6 +11,7 @@ template <typename T> static inline T pac_strip(T &addr, bool keep = false) {
   if (addr == 0) {
     return 0;
   }
+
 #if defined(__APPLE__) && (defined(__arm64e__) || __has_feature(ptrauth_calls))
   if (keep) {
     return (T)ptrauth_strip((void *)addr, ptrauth_key_asia);
@@ -19,6 +20,7 @@ template <typename T> static inline T pac_strip(T &addr, bool keep = false) {
     return addr;
   }
 #endif
+
   return addr;
 }
 
@@ -26,6 +28,7 @@ template <typename T> static inline T pac_sign(T &addr, bool keep = false) {
   if (addr == 0) {
     return 0;
   }
+
 #if defined(__APPLE__) && (defined(__arm64e__) || __has_feature(ptrauth_calls))
   if (keep) {
     return (T)ptrauth_sign_unauthenticated((void *)addr, ptrauth_key_asia, 0);
@@ -34,6 +37,7 @@ template <typename T> static inline T pac_sign(T &addr, bool keep = false) {
     return addr;
   }
 #endif
+
   return addr;
 }
 
@@ -42,7 +46,9 @@ template <typename T> static inline T pac_strip_and_sign(T &addr) {
   pac_sign(addr);
   return addr;
 }
+
 #else
+
 template <typename T> static inline T pac_strip(T &addr, bool keep = false) {
   return addr;
 }
@@ -54,4 +60,5 @@ template <typename T> static inline T pac_sign(T &addr, bool keep = false) {
 template <typename T> static inline T pac_strip_and_sign(T &addr) {
   return addr;
 }
+
 #endif

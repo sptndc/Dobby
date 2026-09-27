@@ -19,14 +19,12 @@ int GenRelocateCodeFixed(void *buffer, CodeMemBlock *origin, CodeMemBlock *reloc
   TurboAssembler turbo_assembler_(0);
   // Set fixed executable code chunk address
   turbo_assembler_.set_fixed_addr(relocated->addr());
-#define _ turbo_assembler_.
-#define __ turbo_assembler_.code_buffer()->
+// #define _ turbo_assembler_.
+// #define __ turbo_assembler_.code_buffer()->
 
   auto curr_orig_ip = (addr64_t)origin->addr();
   auto curr_relo_ip = (addr64_t)relocated->addr();
-
   auto buffer_cursor = (uint8_t *)buffer;
-
   int predefined_relocate_size = origin->size;
 
   while ((buffer_cursor < ((uint8_t *)buffer + predefined_relocate_size))) {
@@ -51,10 +49,11 @@ int GenRelocateCodeFixed(void *buffer, CodeMemBlock *origin, CodeMemBlock *reloc
   }
 
   // update origin
-  auto new_origin_len = curr_orig_ip - origin->addr();
+  size_t new_origin_len = curr_orig_ip - origin->addr();
   origin->reset(origin->addr(), new_origin_len);
 
   int relo_len = turbo_assembler_.code_buffer()->buffer_size;
+
   if (relo_len > relocated->size) {
     DEBUG_LOG("pre-alloc code chunk not enough");
     return -1;

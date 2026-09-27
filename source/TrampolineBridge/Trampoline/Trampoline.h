@@ -19,9 +19,9 @@ enum trampoline_type_t {
 
 struct Trampoline {
   int type;
-  CodeMemBlock buffer;
+  CodeMemBlock buffer = {};
 
-  Trampoline *forward_trampoline;
+  Trampoline *forward_trampoline = {};
 
   Trampoline() : type(0), buffer() {
   }

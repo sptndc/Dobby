@@ -22,11 +22,11 @@
 
 #include <sys/mman.h>
 
-
 // memcpy
 void *memcpy(void *dest, const void *src, size_t n) {
   for (int i = 0; i < n; i++)
     ((char *)dest)[i] = ((char *)src)[i];
+
   return dest;
 }
 
@@ -60,6 +60,7 @@ PUBLIC int DobbyCodePatch(void *address, uint8_t *buffer, uint32_t buffer_size) 
     uint8_t *buffer_a = buffer;
     uint32_t buffer_size_a = (patch_page + page_size - (addr_t)address);
     auto ret = DobbyCodePatch(address_a, buffer_a, buffer_size_a);
+
     if (ret == -1) {
       return ret;
     }
@@ -81,6 +82,7 @@ PUBLIC int DobbyCodePatch(void *address, uint8_t *buffer, uint32_t buffer_size) 
   int orig_max_prot = 0;
   int share_mode = 0;
   int is_enable_remap = -1;
+
   if (0 && is_enable_remap == -1) {
     auto get_region_info = [&](addr_t region_start) -> void {
       vm_region_submap_info_64 region_submap_info;
@@ -88,7 +90,8 @@ PUBLIC int DobbyCodePatch(void *address, uint8_t *buffer, uint32_t buffer_size) 
       mach_vm_address_t addr = region_start;
       mach_vm_size_t size = 0;
       natural_t depth = 0;
-      while (1) {
+
+      while (true) {
         kr = mach_vm_region_recurse(mach_task_self(), (mach_vm_address_t *)&addr, (mach_vm_size_t *)&size, &depth,
                                     (vm_region_recurse_info_t)&region_submap_info, &count);
         if (region_submap_info.is_submap) {
@@ -101,7 +104,9 @@ PUBLIC int DobbyCodePatch(void *address, uint8_t *buffer, uint32_t buffer_size) 
         }
       }
     };
+
     get_region_info(remap_dest_page);
+
     if (orig_max_prot != 5 && share_mode != 2) {
       is_enable_remap = 1;
     } else {
@@ -109,6 +114,7 @@ PUBLIC int DobbyCodePatch(void *address, uint8_t *buffer, uint32_t buffer_size) 
       DEBUG_LOG("code patch %p won't use remap", address);
     }
   }
+
   if (0 && is_enable_remap == 1) {
     addr_t remap_dummy_page = 0;
     {
@@ -155,13 +161,17 @@ PUBLIC int DobbyCodePatch(void *address, uint8_t *buffer, uint32_t buffer_size) 
     }
 
     static __typeof(vm_protect) *vm_protect_fn = nullptr;
+
     if (vm_protect_fn == nullptr) {
       vm_protect_fn = (__typeof(vm_protect) *)DobbySymbolResolver("dyld", "vm_protect");
+
       if (vm_protect_fn == nullptr) {
         vm_protect_fn = (__typeof(vm_protect) *)DobbySymbolResolver("libsystem_kernel.dylib", "_vm_protect");
       }
+
       pac_sign(vm_protect_fn);
     }
+
     {
       kr = vm_protect_fn(self_task, remap_dest_page, page_size, false, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY);
       KERN_RETURN_ERROR(kr, -1);

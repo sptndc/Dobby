@@ -29,6 +29,7 @@ CapstoneDisassembler *CapstoneDisassembler::Get(const std::string &arch) {
   if (instance_ == nullptr) {
     cs_err err = CS_ERR_OK;
     csh csh_;
+
     if (arch == "arm") {
       err = cs_open(CS_ARCH_ARM, CS_MODE_ARM, &csh_);
     } else if (arch == "arm64") {
@@ -38,8 +39,10 @@ CapstoneDisassembler *CapstoneDisassembler::Get(const std::string &arch) {
     } else if (arch == "x86") {
       err = cs_open(CS_ARCH_X86, CS_MODE_32, &csh_);
     }
+
     instance_ = new CapstoneDisassembler(arch, csh_);
   }
+
   return instance_;
 }
 
@@ -54,10 +57,12 @@ void CapstoneDisassembler::disassemble(uintptr_t addr, char *buffer, size_t buff
   cs_insn *insns;
 
   size_t count = cs_disasm(csh_, (uint8_t *)buffer, buffer_size, addr, 0, &insns);
+
   for (size_t i = 0; i < count; ++i) {
     auto &insn = insns[i];
     printf("%s %p: %s %s\n", "-", insn.address, insn.mnemonic, insn.op_str);
   }
+
   cs_free(insns, count);
 }
 
@@ -116,6 +121,7 @@ void dump_regions(uc_engine *uc) {
   uc_mem_region *regions;
   uint32_t region_count;
   uc_mem_regions(uc, &regions, &region_count);
+
   for (int i = 0; i < region_count; ++i) {
     auto &region = regions[i];
     printf("region: %p - %p\n", region.begin, region.end);
@@ -124,6 +130,7 @@ void dump_regions(uc_engine *uc) {
 
 UniconEmulator::UniconEmulator(const std::string &arch) {
   uc_err err = UC_ERR_OK;
+
   if (arch == "arm") {
     err = uc_open(UC_ARCH_ARM, UC_MODE_ARM, &uc_);
   } else if (arch == "arm64") {
@@ -133,6 +140,7 @@ UniconEmulator::UniconEmulator(const std::string &arch) {
   } else if (arch == "x86") {
     err = uc_open(UC_ARCH_X86, UC_MODE_32, &uc_);
   }
+
   assert(err == UC_ERR_OK);
 
   uc_hook hook_trace_insn_handle;

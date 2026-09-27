@@ -6,7 +6,7 @@
 #include "core/arch/arm/registers-arm.h"
 #include "core/assembler/assembler.h"
 
-#include "MemoryAllocator/CodeBuffer/code_buffer_arm.h"
+#include "MemoryAllocator/CodeMemBuffer.h"
 
 enum ref_label_type_t { kLdrLiteral };
 
@@ -185,26 +185,27 @@ private:
   ExecuteState execute_state_;
 
 public:
-  Assembler(void *address) : AssemblerBase(address) {
+  Assembler(void *address) : AssemblerBase((addr_t)address) {
     execute_state_ = ARMExecuteState;
-    buffer_ = new CodeBuffer();
+    buffer_ = new CodeMemBuffer();
   }
 
   // shared_ptr is better choice
   // but we can't use it at kernelspace
-  Assembler(void *address, CodeBuffer *buffer) : AssemblerBase(address) {
+  Assembler(void *address, CodeMemBuffer *buffer) : AssemblerBase((addr_t)address) {
     execute_state_ = ARMExecuteState;
     buffer_ = buffer;
   }
 
   void ClearCodeBuffer() {
-    buffer_ = NULL;
+    buffer_ = nullptr;
   }
 
 public:
   void SetExecuteState(ExecuteState state) {
     execute_state_ = state;
   }
+
   ExecuteState GetExecuteState() {
     return execute_state_;
   }
@@ -314,7 +315,7 @@ public:
   ~TurboAssembler() {
   }
 
-  TurboAssembler(void *address, CodeBuffer *buffer) : Assembler(address, buffer) {
+  TurboAssembler(void *address, CodeMemBuffer *buffer) : Assembler(address, buffer) {
   }
 
   void Ldr(Register rt, PseudoLabel *label) {
@@ -339,7 +340,7 @@ public:
   void Move32Immeidate(Register rd, const Operand &x, Condition cond = AL) {
   }
 
-  void RelocLabelFixup(stl::unordered_map<off_t, off_t> *relocated_offset_map) {
+  void RelocLabelFixup(std::unordered_map<off_t, off_t> *relocated_offset_map) {
     for (auto *data_label : data_labels_) {
       auto val = data_label->data<int32_t>();
       auto iter = relocated_offset_map->find(val);
@@ -349,6 +350,5 @@ public:
     }
   }
 };
-
 } // namespace arm
 } // namespace zz

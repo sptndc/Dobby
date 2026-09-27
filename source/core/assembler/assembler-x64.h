@@ -570,7 +570,7 @@ public:
   ~TurboAssembler() {
   }
 
-  addr64_t CurrentIP(){
+  addr64_t CurrentIP() {
     return pc_offset() + (addr_t)fixed_addr;
   }
 

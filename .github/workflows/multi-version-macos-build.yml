@@ -1,0 +1,42 @@
+name: Multi-Version macOS Build
+
+on:
+  push:
+    branches: [ bepinex ]
+
+jobs:
+  build:
+    name: Build macOS (${{ matrix.os }} - ${{ matrix.architecture }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # Compiles on macOS 14 (Sonoma) AND the latest version
+        os: [macos-14, macos-latest]
+        architecture: [arm64, x86_64]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_SYSTEM_PROCESSOR="${{ matrix.architecture }}" \
+            -DCMAKE_SYSTEM_NAME="Darwin" \
+            -DFullFloatingPointRegisterPack=ON
+
+      - name: Build
+        run: |
+          cmake --build build --parallel 4 --target dobby
+
+      - name: Verify
+        run: |
+          file build/libdobby.dylib
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dobby-${{ matrix.os }}-${{ matrix.architecture }}
+          path: build/libdobby.dylib

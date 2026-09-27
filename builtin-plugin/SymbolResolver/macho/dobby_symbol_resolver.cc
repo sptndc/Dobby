@@ -37,6 +37,7 @@ PUBLIC void *DobbySymbolResolver(const char *image_name, const char *symbol_name
       continue;
 
     auto header = (mach_header_t *)module.base;
+
     if (header == nullptr)
       continue;
 
@@ -75,6 +76,7 @@ PUBLIC void *DobbySymbolResolver(const char *image_name, const char *symbol_name
 
     macho_ctx_t macho_ctx(header);
     result = macho_ctx.symbol_resolve(symbol_name_pattern);
+
     if (result) {
       return (void *)result;
     }
@@ -82,10 +84,12 @@ PUBLIC void *DobbySymbolResolver(const char *image_name, const char *symbol_name
 
 #if !defined(BUILDING_KERNEL)
   mach_header_t *dyld_header = NULL;
+
   if (image_name != NULL && strcmp(image_name, "dyld") == 0) {
     // task info
     task_dyld_info_data_t task_dyld_info;
     mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
+
     if (task_info(mach_task_self(), TASK_DYLD_INFO, (task_info_t)&task_dyld_info, &count)) {
       return NULL;
     }
@@ -98,6 +102,7 @@ PUBLIC void *DobbySymbolResolver(const char *image_name, const char *symbol_name
     result = dyld_ctx.symbol_resolve(symbol_name_pattern);
 
     bool is_dyld_in_cache = ((mach_header_t *)dyld_header)->flags & MH_DYLIB_IN_CACHE;
+
     if (!is_dyld_in_cache && result == 0) {
       result = macho_file_symbol_resolve(dyld_header->cputype, dyld_header->cpusubtype, "/usr/lib/dyld",
                                          (char *)symbol_name_pattern);

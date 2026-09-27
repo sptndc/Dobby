@@ -5,10 +5,7 @@
 #include "core/arch/x64/registers-x64.h"
 #include "core/assembler/assembler.h"
 
-#include "MemoryAllocator/CodeBuffer/code_buffer_x64.h"
-
-#include "xnucxx/LiteMutableArray.h"
-#include "xnucxx/LiteIterator.h"
+#include "MemoryAllocator/CodeMemBuffer.h"
 
 #define IsInt8(imm) (-128 <= imm && imm <= 127)
 
@@ -33,30 +30,31 @@ public:
 
 public:
   PseudoLabel(void) {
-    instructions_.initWithCapacity(8);
+    instructions_.reserve(8);
   }
+
   ~PseudoLabel(void) {
-    for (size_t i = 0; i < instructions_.getCount(); i++) {
-      PseudoLabelInstruction *item = (PseudoLabelInstruction *)instructions_.getObject(i);
+    for (auto instruction : instructions_) {
+      PseudoLabelInstruction *item = reinterpret_cast<PseudoLabelInstruction *>(instruction);
       delete item;
     }
 
-    instructions_.release();
+    instructions_.clear();
   }
 
   bool has_confused_instructions() {
-    return instructions_.getCount() > 0;
+    return instructions_.size() > 0;
   }
 
-  void link_confused_instructions(CodeBuffer *buffer = nullptr) {
+  void link_confused_instructions(CodeMemBuffer *buffer = nullptr) {
     if (!buffer)
       UNREACHABLE();
-    CodeBuffer *_buffer = buffer;
 
-    for (size_t i = 0; i < instructions_.getCount(); i++) {
-      PseudoLabelInstruction *instruction = (PseudoLabelInstruction *)instructions_.getObject(i);
+    CodeMemBuffer *_buffer = buffer;
 
-      int32_t offset = pos() - instruction->position_;
+    for (auto iter : instructions_) {
+      PseudoLabelInstruction *instruction = reinterpret_cast<PseudoLabelInstruction *>(iter);
+      int32_t offset = pos - instruction->position_;
 
       switch (instruction->type_) {
       case kDisp32_off_9: {
@@ -71,14 +69,14 @@ public:
   };
 
   void link_to(int pos, PseudoLabelType type) {
-    PseudoLabelInstruction *instruction = new PseudoLabelInstruction;
+    PseudoLabelInstruction *instruction = new PseudoLabelInstruction{};
     instruction->position_ = pos;
     instruction->type_ = type;
-    instructions_.pushObject((LiteObject *)instruction);
+    instructions_.push_back(instruction);
   }
 
 private:
-  LiteMutableArray instructions_;
+  std::vector<void *> instructions_;
 };
 
 class RelocDataLabel : public PseudoLabel {
@@ -93,7 +91,6 @@ public:
 
 private:
   uint64_t data_;
-
   int data_size_;
 };
 
@@ -103,6 +100,7 @@ private:
 
 typedef union _ModRM {
   byte_t ModRM;
+
   struct {
     byte_t RM : 3;
     byte_t RegOpcode : 3;
@@ -140,7 +138,6 @@ public:
 
 private:
   const int64_t value_;
-
   int value_size_;
 };
 
@@ -226,9 +223,10 @@ protected:
   void SetModRM(int mod, Register rm) {
     ASSERT((mod & ~3) == 0);
 
-    if ((rm.code() > 7) && !((rm.Is(r12)) && (mod != 3))) {
+    if ((rm.code() > 7) && !((rm == r12) && (mod != 3))) {
       rex_ |= REX_B;
     }
+
     encoding_[0] = (mod << 6) | (rm.code() & 7);
     length_ = 1;
   }
@@ -241,8 +239,10 @@ protected:
       ASSERT((rex_ & REX_B) == 0); // Must not have REX.B already set.
       rex_ |= REX_B;
     }
+
     if (index.code() > 7)
       rex_ |= REX_X;
+
     encoding_[1] = (scale << 6) | ((index.code() & 7) << 3) | (base.code() & 7);
     length_ = 2;
   }
@@ -284,22 +284,28 @@ public:
     int base_ = base.code();
     int rbp_ = rbp.code();
     int rsp_ = rsp.code();
+
     if ((disp == 0) && ((base_ & 7) != rbp_)) {
       SetModRM(0, base);
+
       if ((base_ & 7) == rsp_) {
         SetSIB(TIMES_1, rsp, base);
       }
     } else if (IsInt8(disp)) {
       SetModRM(1, base);
+
       if ((base_ & 7) == rsp_) {
         SetSIB(TIMES_1, rsp, base);
       }
+
       SetDisp8(disp);
     } else {
       SetModRM(2, base);
+
       if ((base_ & 7) == rsp_) {
         SetSIB(TIMES_1, rsp, base);
       }
+
       SetDisp32(disp);
     }
   }
@@ -320,6 +326,7 @@ public:
   Address(Register base, Register index, ScaleFactor scale, int32_t disp) {
     ASSERT(index.code() != rsp.code()); // Illegal addressing mode.
     int rbp_ = rbp.code();
+
     if ((disp == 0) && ((base.code() & 7) != rbp_)) {
       SetModRM(0, rsp);
       SetSIB(scale, index, base);
@@ -341,9 +348,11 @@ private:
   Address(Register base, int32_t disp, bool fixed) {
     ASSERT(fixed);
     SetModRM(2, base);
+
     if ((base.code() & 7) == rsp.code()) {
       SetSIB(TIMES_1, rsp, base);
     }
+
     SetDisp32(disp);
   }
 };
@@ -353,33 +362,30 @@ private:
 
 class Assembler : public AssemblerBase {
 public:
-  Assembler(void *address, int mode) : AssemblerBase(address) : mode_(mode) {
-    buffer_ = new CodeBuffer();
+  Assembler(void *address, int mode) : AssemblerBase((addr_t)address), mode_(mode) {
   }
+
   ~Assembler() {
-    if (buffer_)
-      delete buffer_;
-    buffer_ = NULL
   }
 
 public:
   void Emit1(byte_t val) {
-    buffer_->Emit<int8_t>(val);
+    code_buffer_.Emit<int8_t>(val);
   }
 
   void Emit(int32_t value) {
-    buffer_->Emit<int32_t>(value);
+    code_buffer_.Emit<int32_t>(value);
   }
 
   void EmitInt64(int64_t value) {
-    buffer_->Emit<int64_t>(value);
+    code_buffer_.Emit<int64_t>(value);
   }
 
   void EmitAddr(uint64_t addr) {
-    if (mode == 64) {
-      EmitInt64(int64_t)addr);
+    if (mode_ == 64) {
+      EmitInt64((int64_t)addr);
     } else {
-      EmitI((int32_t)addr);
+      Emit((int32_t)addr);
     }
   }
 
@@ -398,36 +404,44 @@ public:
     if (w) {
       rex |= 0x48; // REX.W000
     }
+
     if (r) {
       rex |= 0x44; // REX.0R00
     }
+
     if (x) {
       rex |= 0x42; // REX.00X0
     }
+
     if (b) {
       rex |= 0x41; // REX.000B
     }
+
     if (rex != 0) {
       return rex;
     }
+
     return 0;
   }
 
   void Emit_64REX(uint8_t extra) {
     uint8_t rex = EmitOptionalRex(false, true, false, false, false);
     rex |= extra;
+
     if (rex)
       Emit1(rex);
   }
 
   void EmitREX_ExtraRegister(Register reg) {
     uint8_t rex = EmitOptionalRex(false, reg.size() == 64, reg.code() > 7, false, reg.code() > 7);
+
     if (rex)
       Emit1(rex);
   }
 
   void EmitREX_Register(Register reg) {
     uint8_t rex = EmitOptionalRex(false, reg.size() == 64, reg.code() > 7, false, false);
+
     if (rex)
       Emit1(rex);
   }
@@ -455,11 +469,11 @@ public:
 
   void EmitImmediate(Immediate imm, int imm_size) {
     if (imm_size == 8) {
-      buffer_->Emit<int8_t>((uint8_t)imm.value());
+      code_buffer_.Emit<int8_t>((uint8_t)imm.value());
     } else if (imm_size == 32) {
-      buffer_->Emit<int32_t>((uint32_t)imm.value());
+      code_buffer_.Emit<int32_t>((uint32_t)imm.value());
     } else if (imm_size == 64) {
-      buffer_->Emit<int64_t>((uint64_t)imm.value());
+      code_buffer_.Emit<int64_t>((uint64_t)imm.value());
     } else {
       UNREACHABLE();
     }
@@ -474,14 +488,16 @@ public:
   // RM or MR
   void Emit_OpEn_Register_MemOperand(Register dst, Address &operand) {
     EmitModRM_Update_Register(operand.modrm(), dst);
-    buffer_->EmitBuffer(&operand.encoding_[1], operand.length_ - 1);
+    code_buffer_.EmitBuffer(&operand.encoding_[1], operand.length_ - 1);
   }
+
   void Emit_OpEn_Register_RegOperand(Register dst, Register src) {
     EmitModRM_Register_Register(dst, src);
   }
 
   void Emit_OpEn_MemOperand_Immediate(uint8_t extra_opcode, Address &operand, Immediate imm) {
   }
+
   void Emit_OpEn_RegOperand_Immediate(uint8_t extra_opcode, Register reg, Immediate imm) {
     EmitModRM_ExtraOpcode_Register(extra_opcode, reg);
     EmitImmediate(imm, imm.size());
@@ -489,8 +505,9 @@ public:
 
   void Emit_OpEn_MemOperand(uint8_t extra_opcode, Address &operand) {
     EmitModRM_Update_ExtraOpcode(operand.modrm(), extra_opcode);
-    buffer_->EmitBuffer(&operand.encoding_[1], operand.length_ - 1);
+    code_buffer_.EmitBuffer(&operand.encoding_[1], operand.length_ - 1);
   }
+
   void Emit_OpEn_RegOperand(uint8_t extra_opcode, Register reg) {
     EmitModRM_ExtraOpcode_Register(extra_opcode, reg);
   }
@@ -625,6 +642,7 @@ public:
   void ret() {
     EmitOpcode(0xc3);
   }
+
   void nop() {
     EmitOpcode(0x90);
   }
@@ -639,7 +657,6 @@ private:
 class TurboAssembler : public Assembler {
 public:
   TurboAssembler(void *address, int mode) : Assembler(address, mode) {
-    data_labels_ = NULL;
   }
 
   addr64_t CurrentIP();
@@ -654,8 +671,8 @@ public:
     MovRipToRegister(VOLATILE_REGISTER);
     call(Address(VOLATILE_REGISTER, INT32_MAX));
     {
-      RelocDataLabel *addrLabel = new RelocDataLabel((uint64_t)function.address());
-      addrLabel->link_to(ip_offset(), PseudoLabel::kDisp32_off_9);
+      RelocDataLabel *addrLabel = new RelocDataLabel((uint64_t)function.address);
+      addrLabel->link_to(pc_offset(), PseudoLabel::kDisp32_off_9);
       this->AppendRelocLabel(addrLabel);
     }
     nop();
@@ -670,38 +687,40 @@ public:
   // RelocDataLabel
 
   void bindLabel(PseudoLabel *label) {
-    const addr_t bound_pc = buffer_->GetBufferSize();
+    const addr_t bound_pc = code_buffer_.size();
     label->bind_to(bound_pc);
+
     // If some instructions have been wrote, before the label bound, we need link these `confused` instructions
     if (label->has_confused_instructions()) {
-      label->link_confused_instructions(reinterpret_cast<CodeBuffer *>(this->code_buffer()));
+      label->link_confused_instructions(reinterpret_cast<CodeMemBuffer *>(this->code_buffer()));
     }
   }
 
   void relocDataLabels() {
-    if (data_labels_ == NULL)
+    if (data_labels_.empty())
       return;
-    for (size_t i = 0; i < data_labels_->getCount(); i++) {
-      RelocDataLabel *label = (RelocDataLabel *)data_labels_->getObject(i);
+
+    for (auto data_label : data_labels_) {
+      RelocDataLabel *label = reinterpret_cast<RelocDataLabel *>(data_label);
       bindLabel(label);
       EmitAddr(label->data());
     }
   }
 
   void AppendRelocLabel(RelocDataLabel *label) {
-    if (data_labels_ == NULL) {
-      data_labels_ = new LiteMutableArray(8);
+    if (data_labels_.empty()) {
+      data_labels_.reserve(8);
     }
-    data_labels_->pushObject((LiteObject *)label);
+
+    data_labels_.push_back(label);
   }
 
-  LiteMutableArray *GetLabels() {
+  std::vector<void *> GetLabels() {
     return data_labels_;
   }
 
 private:
-  LiteMutableArray *data_labels_;
+  std::vector<void *> data_labels_;
 };
-
 } // namespace x86shared
 } // namespace zz

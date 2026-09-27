@@ -5,15 +5,9 @@
 #include <mach-o/nlist.h>
 #include <mach-o/dyld_images.h>
 
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-
 #include <mach/vm_map.h>
 #include <mach/mach.h>
 #include <sys/mman.h>
-
-#include <vector>
 
 #include "dobby/common.h"
 
@@ -40,24 +34,28 @@ static void *iterate_indirect_symtab(char *symbol_name, section_t *section, intp
   const bool is_data_const = strcmp(section->segname, "__DATA_CONST") == 0;
   uint32_t *indirect_symbol_indices = indirect_symtab + section->reserved1;
   void **indirect_symbol_bindings = (void **)((uintptr_t)slide + section->addr);
-
   vm_prot_t old_protection = VM_PROT_READ;
+
   if (is_data_const) {
     mprotect(indirect_symbol_bindings, section->size, PROT_READ | PROT_WRITE);
   }
 
   for (uint i = 0; i < section->size / sizeof(void *); i++) {
     uint32_t symtab_index = indirect_symbol_indices[i];
+
     if (symtab_index == INDIRECT_SYMBOL_ABS || symtab_index == INDIRECT_SYMBOL_LOCAL ||
         symtab_index == (INDIRECT_SYMBOL_LOCAL | INDIRECT_SYMBOL_ABS)) {
       continue;
     }
+
     uint32_t strtab_offset = symtab[symtab_index].n_un.n_strx;
     char *local_symbol_name = strtab + strtab_offset;
     bool symbol_name_longer_than_1 = symbol_name[0] && symbol_name[1];
+
     if (strcmp(local_symbol_name, symbol_name) == 0) {
       return &indirect_symbol_bindings[i];
     }
+
     if (local_symbol_name[0] == '_') {
       if (strcmp(symbol_name, &local_symbol_name[1]) == 0) {
         return &indirect_symbol_bindings[i];
@@ -67,17 +65,22 @@ static void *iterate_indirect_symtab(char *symbol_name, section_t *section, intp
 
   if (is_data_const && 0) {
     int protection = 0;
+
     if (old_protection & VM_PROT_READ) {
       protection |= PROT_READ;
     }
+
     if (old_protection & VM_PROT_WRITE) {
       protection |= PROT_WRITE;
     }
+
     if (old_protection & VM_PROT_EXECUTE) {
       protection |= PROT_EXEC;
     }
+
     mprotect(indirect_symbol_bindings, section->size, protection);
   }
+
   return NULL;
 }
 
@@ -86,10 +89,11 @@ static void *get_global_offset_table_stub(mach_header_t *header, char *symbol_na
   segment_command_t *text_segment, *data_segment, *linkedit_segment;
   struct symtab_command *symtab_cmd = NULL;
   struct dysymtab_command *dysymtab_cmd = NULL;
-
   uintptr_t cur = (uintptr_t)header + sizeof(mach_header_t);
+
   for (uint i = 0; i < header->ncmds; i++, cur += curr_seg_cmd->cmdsize) {
     curr_seg_cmd = (segment_command_t *)cur;
+
     if (curr_seg_cmd->cmd == LC_SEGMENT_ARCH_DEPENDENT) {
       if (strcmp(curr_seg_cmd->segname, "__LINKEDIT") == 0) {
         linkedit_segment = curr_seg_cmd;
@@ -114,25 +118,30 @@ static void *get_global_offset_table_stub(mach_header_t *header, char *symbol_na
   nlist_t *symtab = (nlist_t *)(linkedit_base + symtab_cmd->symoff);
   char *strtab = (char *)(linkedit_base + symtab_cmd->stroff);
   uint32_t symtab_count = symtab_cmd->nsyms;
-
   uint32_t *indirect_symtab = (uint32_t *)(linkedit_base + dysymtab_cmd->indirectsymoff);
-
   cur = (uintptr_t)header + sizeof(mach_header_t);
+
   for (uint i = 0; i < header->ncmds; i++, cur += curr_seg_cmd->cmdsize) {
     curr_seg_cmd = (segment_command_t *)cur;
+
     if (curr_seg_cmd->cmd == LC_SEGMENT_ARCH_DEPENDENT) {
       if (strcmp(curr_seg_cmd->segname, "__DATA") != 0 && strcmp(curr_seg_cmd->segname, "__DATA_CONST") != 0) {
         continue;
       }
+
       for (uint j = 0; j < curr_seg_cmd->nsects; j++) {
         section_t *sect = (section_t *)(cur + sizeof(segment_command_t)) + j;
+
         if ((sect->flags & SECTION_TYPE) == S_LAZY_SYMBOL_POINTERS) {
           void *stub = iterate_indirect_symtab(symbol_name, sect, slide, symtab, strtab, indirect_symtab);
+
           if (stub)
             return stub;
         }
+
         if ((sect->flags & SECTION_TYPE) == S_NON_LAZY_SYMBOL_POINTERS) {
           void *stub = iterate_indirect_symtab(symbol_name, sect, slide, symtab, strtab, indirect_symtab);
+
           if (stub)
             return stub;
         }
@@ -144,9 +153,9 @@ static void *get_global_offset_table_stub(mach_header_t *header, char *symbol_na
 }
 
 PUBLIC int DobbyImportTableReplace(char *image_name, char *symbol_name, void *fake_func, void **orig_func_ptr) {
-  std::vector<RuntimeModule> ProcessModuleMap = ProcessRuntime::getModuleMap();
+  auto modules = ProcessRuntime::getModuleMap();
 
-  for (auto module : ProcessModuleMap) {
+  for (auto module : modules) {
     if (image_name != NULL && strstr(module.path, image_name) == NULL)
       continue;
 
@@ -167,8 +176,8 @@ PUBLIC int DobbyImportTableReplace(char *image_name, char *symbol_name, void *fa
     uint32_t nlist_count = 0;
     nlist_t *nlist_array = 0;
     char *string_pool = 0;
-
     void *stub = get_global_offset_table_stub((mach_header_t *)header, symbol_name);
+
     if (stub) {
       void *orig_func;
       orig_func = *(void **)stub;
@@ -188,5 +197,6 @@ PUBLIC int DobbyImportTableReplace(char *image_name, char *symbol_name, void *fa
     if (image_name)
       return 0;
   }
+
   return -1;
 }

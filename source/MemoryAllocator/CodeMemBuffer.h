@@ -2,6 +2,7 @@
 
 #include "dobby/common.h"
 #include "MemoryAllocator.h"
+
 struct MemBuffer {
   uint8_t *buffer;
   uint32_t buffer_size;
@@ -62,9 +63,11 @@ struct MemBuffer {
   void ensure_capacity(int in_size) {
     if (buffer_size + in_size > buffer_capacity) {
       uint32_t new_capacity = buffer_capacity * 2;
+
       while (new_capacity < buffer_size + in_size) {
         new_capacity *= 2;
       }
+
       uint8_t *new_buffer = (uint8_t *)operator new(new_capacity);
       memcpy(new_buffer, buffer, buffer_size);
       operator delete(buffer);
@@ -93,6 +96,7 @@ struct CodeMemBuffer : MemBuffer {
 
 #if defined(TARGET_ARCH_ARM)
   enum ExecuteState{ARMExecuteState, ThumbExecuteState};
+
   arm_inst_t LoadARMInst(uint32_t offset) {
     return *(arm_inst_t *)(data() + offset);
   }
@@ -134,6 +138,7 @@ struct CodeMemBuffer : MemBuffer {
   }
 #elif defined(TARGET_ARCH_ARM64)
   typedef int32_t arm64_inst_t;
+
   arm64_inst_t LoadInst(uint32_t offset) {
     return *reinterpret_cast<int32_t *>(data() + offset);
   }

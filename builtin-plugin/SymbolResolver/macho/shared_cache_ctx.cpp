@@ -32,6 +32,7 @@ struct dyld_cache_header *shared_cache_get_load_addr() {
   task_dyld_info_data_t task_dyld_info;
   mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
   kern_return_t ret = task_info(mach_task_self(), TASK_DYLD_INFO, (task_info_t)&task_dyld_info, &count);
+
   if (ret != KERN_SUCCESS) {
     ERROR_LOG("task_info failed, ret: %d", ret);
     return NULL;
@@ -57,9 +58,9 @@ int shared_cache_load_symbols(shared_cache_ctx_t *ctx) {
 
   auto mmapSharedCacheSymbolsMng = new MmapFileManager(shared_cache_symbols_path);
   auto mmap_buffer = mmapSharedCacheSymbolsMng->map();
+
   if (mmap_buffer) { // iphoneos >= 15.0, which has .symbols file
     ctx->mmap_shared_cache = (struct dyld_cache_header *)mmap_buffer;
-
     localSymbolsOffset = ctx->mmap_shared_cache->localSymbolsOffset;
   } else {
     // iphoneos < 15.0, which has no .symbols file
@@ -73,6 +74,7 @@ int shared_cache_load_symbols(shared_cache_ctx_t *ctx) {
       return -1;
 
     auto mmap_buffer = mmapSharedCacheMng->map_options(mmap_length, mmap_offset);
+
     if (!mmap_buffer) {
       return -1;
     }
@@ -86,6 +88,7 @@ int shared_cache_load_symbols(shared_cache_ctx_t *ctx) {
 
     latest_shared_cache_format = false;
   }
+
   ctx->latest_shared_cache_format = latest_shared_cache_format;
 
   {
@@ -112,9 +115,11 @@ int shared_cache_ctx_init(shared_cache_ctx_t *ctx) {
   memset(ctx, 0, sizeof(shared_cache_ctx_t));
 
   auto runtime_shared_cache = shared_cache_get_load_addr();
+
   if (!runtime_shared_cache) {
     return -1;
   }
+
   ctx->runtime_shared_cache = runtime_shared_cache;
 
   // shared cache slide
@@ -129,6 +134,7 @@ int shared_cache_ctx_init(shared_cache_ctx_t *ctx) {
 // refer: dyld
 bool shared_cache_is_contain(shared_cache_ctx_t *ctx, addr_t addr, size_t length) {
   struct dyld_cache_header *runtime_shared_cache;
+
   if (ctx) {
     runtime_shared_cache = ctx->runtime_shared_cache;
   } else {
@@ -137,6 +143,7 @@ bool shared_cache_is_contain(shared_cache_ctx_t *ctx, addr_t addr, size_t length
 
   addr_t region_start = runtime_shared_cache->sharedRegionStart + ctx->runtime_slide;
   addr_t region_end = region_start + runtime_shared_cache->sharedRegionSize;
+
   if (addr >= region_start && addr < region_end)
     return true;
 
@@ -152,6 +159,7 @@ int shared_cache_get_symbol_table(shared_cache_ctx_t *ctx, mach_header_t *image_
   const char *localStrings = NULL;
 
   const uint32_t entriesCount = ctx->local_symbols_info->entriesCount;
+
   for (uint32_t i = 0; i < entriesCount; ++i) {
     if (ctx->latest_shared_cache_format) {
       if (ctx->local_symbols_entries_64[i].dylibOffset == textOffsetInCache) {
@@ -176,6 +184,7 @@ int shared_cache_get_symbol_table(shared_cache_ctx_t *ctx, mach_header_t *image_
       INFO_LOG("dyld image: %s", image_name);
 #endif
   }
+
   *out_symtab = localNlists;
   *out_symtab_count = (uint32_t)localNlistCount;
   *out_strtab = (char *)ctx->strtab;

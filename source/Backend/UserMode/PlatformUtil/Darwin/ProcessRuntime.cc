@@ -3,8 +3,6 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
 #include <dlfcn.h>
 #include <mach/mach_init.h>
 #include <mach-o/dyld.h>
@@ -33,11 +31,11 @@ static bool memory_region_comparator(MemRegion a, MemRegion b) {
   return (a.addr() < b.addr());
 }
 
-stl::vector<MemRegion> *regions;
+std::vector<MemRegion> *regions;
 
-const stl::vector<MemRegion> &ProcessRuntime::getMemoryLayout() {
+const std::vector<MemRegion> &ProcessRuntime::getMemoryLayout() {
   if (regions == nullptr) {
-    regions = new stl::vector<MemRegion>();
+    regions = new std::vector<MemRegion>();
   }
 
   regions->clear();
@@ -47,10 +45,12 @@ const stl::vector<MemRegion> &ProcessRuntime::getMemoryLayout() {
   mach_vm_address_t addr = 0;
   mach_vm_size_t size = 0;
   natural_t depth = 0;
+
   while (true) {
     count = VM_REGION_SUBMAP_INFO_COUNT_64;
     kern_return_t kr = mach_vm_region_recurse(mach_task_self(), (mach_vm_address_t *)&addr, (mach_vm_size_t *)&size,
                                               &depth, (vm_region_recurse_info_t)&region_submap_info, &count);
+
     if (kr != KERN_SUCCESS) {
       if (kr == KERN_INVALID_ADDRESS) {
         break;
@@ -64,12 +64,15 @@ const stl::vector<MemRegion> &ProcessRuntime::getMemoryLayout() {
     } else {
       MemoryPermission perm = kNoAccess;
       auto prot = region_submap_info.protection;
+
       if (prot & VM_PROT_READ) {
         perm = (MemoryPermission)(perm | kRead);
       }
+
       if (prot & VM_PROT_WRITE) {
         perm = (MemoryPermission)(perm | kWrite);
       }
+
       if (prot & VM_PROT_EXECUTE) {
         perm = (MemoryPermission)(perm | kExecute);
       }
@@ -86,18 +89,20 @@ const stl::vector<MemRegion> &ProcessRuntime::getMemoryLayout() {
   return *regions;
 }
 
-static stl::vector<RuntimeModule> *modules;
+static std::vector<RuntimeModule> *modules;
 
-const stl::vector<RuntimeModule> &ProcessRuntime::getModuleMap() {
+const std::vector<RuntimeModule> &ProcessRuntime::getModuleMap() {
   if (modules == nullptr) {
-    modules = new stl::vector<RuntimeModule>();
+    modules = new std::vector<RuntimeModule>();
   }
+
   modules->clear();
 
   kern_return_t kr;
   task_dyld_info_data_t task_dyld_info;
   mach_msg_type_number_t count = TASK_DYLD_INFO_COUNT;
   kr = task_info(mach_task_self_, TASK_DYLD_INFO, (task_info_t)&task_dyld_info, &count);
+
   if (kr != KERN_SUCCESS) {
     return *modules;
   }
@@ -117,7 +122,6 @@ const stl::vector<RuntimeModule> &ProcessRuntime::getModuleMap() {
 
   for (int i = 0; i < infoArrayCount; ++i) {
     const struct dyld_image_info *info = &infoArray[i];
-
     {
       strncpy(module.path, info->imageFilePath, sizeof(module.path) - 1);
       module.base = (void *)info->imageLoadAddress;
@@ -125,18 +129,22 @@ const stl::vector<RuntimeModule> &ProcessRuntime::getModuleMap() {
     }
   }
 
-  modules->sort([](const RuntimeModule &a, const RuntimeModule &b) -> int { return a.base < b.base; });
+  std::sort(modules->begin(), modules->end(),
+            [](const RuntimeModule &a, const RuntimeModule &b) -> int { return a.base < b.base; });
 
   return *modules;
 }
 
 RuntimeModule ProcessRuntime::getModule(const char *name) {
   auto modules = getModuleMap();
+
   for (auto module : modules) {
-    auto filename = strrchr(module.path, '/');
+    char *filename = strrchr(module.path, '/');
+
     if (filename && strcmp(filename + 1, name) == 0) {
       return module;
     }
   }
+
   return RuntimeModule{0};
 }

@@ -23,7 +23,7 @@ struct PseudoLabel : Label {
   };
 
   CodeMemBuffer *code_buffer;
-  stl::vector<ref_inst_t> ref_insts;
+  std::vector<ref_inst_t> ref_insts;
 
   PseudoLabel() : PseudoLabel(0) {
   }

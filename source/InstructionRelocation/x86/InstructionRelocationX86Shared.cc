@@ -52,10 +52,11 @@ int GenRelocateSingleX86Insn(addr_t curr_orig_ip, addr_t curr_relo_ip, uint8_t *
   auto x86_insn_encode_end = [&] { x86_insn_encoded_len = code_buffer->buffer_size - x86_insn_encode_start; };
 
   if (insn.primary_opcode >= 0x70 && insn.primary_opcode <= 0x7F) { // jcc rel8
-    DEBUG_LOG("[x86 relo] %p: jc rel8", buffer_cursor);
+    DEBUG_LOG("[x86 relo] jc rel8, %p", buffer_cursor);
 
     int8_t offset = insn.immediate;
     addr_t orig_dst_ip = curr_orig_ip + offset;
+
 #if defined(TARGET_ARCH_IA32)
     uint8_t opcode = 0x80 | (insn.primary_opcode & 0x0f);
 
@@ -80,17 +81,16 @@ int GenRelocateSingleX86Insn(addr_t curr_orig_ip, addr_t curr_relo_ip, uint8_t *
 
   } else if (mode == 64 && (insn.flags & X86_INSN_DECODE_FLAG_IP_RELATIVE) &&
              (insn.operands[1].mem.base == RIP)) { // RIP
-    DEBUG_LOG("[x86 relo] %p: rip", buffer_cursor);
+    DEBUG_LOG("[x86 relo] rip, %p", buffer_cursor);
 
     int32_t orig_disp = insn.operands[1].mem.disp;
     addr_t orig_dst_ip = curr_orig_ip + orig_disp;
 
     addr_t rip_insn_seq_addr = 0;
     {
-
       uint32_t jmp_near_range = (uint32_t)2 * 1024 * 1024 * 1024;
       auto blk = gNearMemoryAllocator.allocNearCodeBlock(insn.length + 6 + 8, orig_dst_ip, jmp_near_range);
-      auto rip_insn_seq = (addr_t)blk.addr();
+      auto rip_insn_seq = blk.addr();
       rip_insn_seq_addr = rip_insn_seq;
     }
 
@@ -113,9 +113,10 @@ int GenRelocateSingleX86Insn(addr_t curr_orig_ip, addr_t curr_relo_ip, uint8_t *
       // keep orig insn opcode
       ___ EmitBuffer(buffer_cursor, insn.displacement_offset);
       ___ Emit<int32_t>(new_disp);
+
       // keep orig insn immediate
       if (insn.immediate_offset) {
-        ___ EmitBuffer((buffer_cursor + insn.immediate_offset), insn.length - insn.immediate_offset);
+        ___ EmitBuffer(buffer_cursor + insn.immediate_offset, insn.length - insn.immediate_offset);
       }
 
       // jmp *(rip) => back to relo process
@@ -126,7 +127,7 @@ int GenRelocateSingleX86Insn(addr_t curr_orig_ip, addr_t curr_relo_ip, uint8_t *
     }
 
   } else if (insn.primary_opcode == 0xEB) { // jmp rel8
-    DEBUG_LOG("[x86 relo] %p: jmp rel8", buffer_cursor);
+    DEBUG_LOG("[x86 relo] jmp rel8, %p", buffer_cursor);
 
     int8_t offset = insn.immediate;
     addr_t orig_dst_ip = curr_orig_ip + offset;
@@ -139,11 +140,16 @@ int GenRelocateSingleX86Insn(addr_t curr_orig_ip, addr_t curr_relo_ip, uint8_t *
     // jmp *(rip)
     codegen_x64_jmp_absolute_addr(code_buffer, orig_dst_ip);
 #endif
+
   } else if (insn.primary_opcode == 0xE8 || insn.primary_opcode == 0xE9) { // call or jmp rel32
-    DEBUG_LOG("[x86 relo] %p:jmp or call rel32", buffer_cursor);
+    DEBUG_LOG("[x86 relo] jmp or call rel32, %p, %d, %d, %d", buffer_cursor, insn.immediate_offset, insn.immediate,
+              insn.length);
 
     int32_t offset = insn.immediate;
     addr_t orig_dst_ip = curr_orig_ip + offset;
+
+    DEBUG_LOG("[x86 relo] cur IP: %p, relo IP: %p, orig_target: %p; new_target: %p", curr_orig_ip, curr_relo_ip,
+              curr_orig_ip + offset, curr_relo_ip + orig_dst_ip);
 
     assert(insn.immediate_offset == 1);
 
@@ -153,7 +159,9 @@ int GenRelocateSingleX86Insn(addr_t curr_orig_ip, addr_t curr_relo_ip, uint8_t *
     __ EmitBuffer(buffer_cursor, insn.immediate_offset);
     emit_rel32_label(code_buffer, x86_insn_encode_start, curr_relo_ip, orig_dst_ip);
 #else
+
     __ Emit<int8_t>(0xFF);
+
     if (insn.primary_opcode == 0xE8) {
       // call *(rip + 2)
       __ Emit<int8_t>(0x15); // ModR/M: 00 010 101
@@ -173,6 +181,7 @@ int GenRelocateSingleX86Insn(addr_t curr_orig_ip, addr_t curr_relo_ip, uint8_t *
       // dst
       __ Emit<int64_t>(orig_dst_ip);
     }
+
 #endif
   } else if (insn.primary_opcode >= 0xE0 && insn.primary_opcode <= 0xE2) { // LOOPNZ/LOOPZ/LOOP/JECXZ
     // LOOP/LOOPcc
@@ -188,24 +197,30 @@ int GenRelocateSingleX86Insn(addr_t curr_orig_ip, addr_t curr_relo_ip, uint8_t *
   {
     int relo_offset = code_buffer->buffer_size;
     int relo_len = relo_offset - last_relo_offset;
-    DEBUG_LOG("insn -> relocated insn: %d -> %d", insn.length, relo_len);
+
+    DEBUG_LOG("[x86 insn -> relo] %d -> %d", insn.length, relo_len);
   }
+
   return relocated_insn_len;
 }
 
 void GenRelocateCodeX86Shared(void *buffer, CodeMemBlock *origin, CodeMemBlock *relocated, bool branch) {
   int expected_relocated_mem_size = 32;
+
 x86_try_again:
   if (!relocated->addr()) {
     auto blk = gMemoryAllocator.allocExecBlock(expected_relocated_mem_size);
     auto relocated_mem = blk.addr();
+
     if (relocated_mem == 0) {
       return;
     }
-    relocated->reset((addr_t)relocated_mem, expected_relocated_mem_size);
+
+    relocated->reset(relocated_mem, expected_relocated_mem_size);
   }
 
   int ret = GenRelocateCodeFixed(buffer, origin, relocated, branch);
+
   if (ret != 0) {
     const int step_size = 16;
     expected_relocated_mem_size += step_size;

@@ -1,4 +1,5 @@
 #pragma once
+
 #include "dobby/dobby_internal.h"
 
 #include "core/arch/arm/constants-arm.h"
@@ -17,8 +18,9 @@ public:
   }
 
   // fix the instruction which not link to the label yet.
-  void link_confused_instructions(CodeBuffer *buffer) {
-    CodeBuffer *_buffer;
+  void link_confused_instructions(CodeMemBuffer *buffer) {
+    CodeMemBuffer *_buffer;
+
     if (buffer)
       _buffer = buffer;
 
@@ -84,7 +86,7 @@ public:
     this->SetExecuteState(ThumbExecuteState);
   }
 
-  ThumbAssembler(void *address, CodeBuffer *buffer) : Assembler(address, buffer) {
+  ThumbAssembler(void *address, CodeMemBuffer *buffer) : Assembler(address, buffer) {
     this->SetExecuteState(ThumbExecuteState);
   }
 
@@ -205,6 +207,7 @@ private:
     }
 
     EmitInt16(0xf000 | LeftShift(signbit, 1, 10) | LeftShift(imm10, 10, 0));
+
     if (link) {
       // Not use LeftShift(1, 1, 14), and use B14 for accelerate
       EmitInt16(0x9000 | LeftShift(j1, 1, 13) | (LeftShift(j2, 1, 11)) | LeftShift(imm11, 11, 0) | B14);
@@ -221,7 +224,7 @@ public:
   ThumbTurboAssembler(void *address) : ThumbAssembler(address) {
   }
 
-  ThumbTurboAssembler(void *address, CodeBuffer *buffer) : ThumbAssembler(address, buffer) {
+  ThumbTurboAssembler(void *address, CodeMemBuffer *buffer) : ThumbAssembler(address, buffer) {
   }
 
   ~ThumbTurboAssembler() {
@@ -285,10 +288,11 @@ public:
     data_labels_.push_back(label);
   }
 
-  void RelocLabelFixup(stl::unordered_map<off_t, off_t> *relocated_offset_map) {
+  void RelocLabelFixup(std::unordered_map<off_t, off_t> *relocated_offset_map) {
     for (auto *data_label : data_labels_) {
       auto val = data_label->data<int32_t>();
       auto iter = relocated_offset_map->find(val);
+
       if (iter != relocated_offset_map->end()) {
         data_label->fixupData<int32_t>(iter->second);
       }
@@ -296,7 +300,7 @@ public:
   }
 
 private:
-  stl::vector<ThumbRelocLabelEntry *> data_labels_;
+  std::vector<ThumbRelocLabelEntry *> data_labels_;
 };
 
 #if 0

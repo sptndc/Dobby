@@ -16,6 +16,7 @@ typedef uint64_t addr64_t;
 typedef void *asm_func_t;
 
 #if defined(__arm__)
+
 typedef struct {
   uint32_t dummy_0;
   uint32_t dummy_1;
@@ -77,7 +78,9 @@ typedef struct {
     } regs;
   } floating;
 } DobbyRegisterContext;
+
 #elif defined(_M_IX86) || defined(__i386__)
+
 typedef struct _RegisterContext {
   uint32_t dummy_0;
   uint32_t esp;
@@ -92,7 +95,9 @@ typedef struct _RegisterContext {
   } general;
 
 } DobbyRegisterContext;
+
 #elif defined(_M_X64) || defined(__x86_64__)
+
 typedef struct {
   union {
     struct {
@@ -104,6 +109,7 @@ typedef struct {
   uint64_t flags;
   uint64_t ret;
 } DobbyRegisterContext;
+
 #endif
 
 #define install_hook_name(name, fn_ret_t, fn_args_t...)                                                                \
@@ -118,8 +124,14 @@ typedef struct {
 // memory code patch
 int DobbyCodePatch(void *address, uint8_t *buffer, uint32_t buffer_size);
 
-// function inline hook
+// function inline hook and commit
 int DobbyHook(void *address, void *fake_func, void **out_origin_func);
+
+// prepare trampoline
+int DobbyPrepare(void *address, void *fake_func, void **out_origin_func);
+
+// commit hook
+int DobbyCommit(void *address);
 
 // dynamic binary instruction instrument
 // for Arm64, can't access q8 - q31, unless enable full floating-point register pack

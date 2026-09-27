@@ -3,7 +3,6 @@
 #include "dobby/common.h"
 
 namespace zz {
-
 class OSThread {
 public:
   typedef int LocalStorageKey;
@@ -27,6 +26,5 @@ public:
   static bool HasThreadLocal(LocalStorageKey key);
 
   static void *GetExistingThreadLocal(LocalStorageKey key);
-};
-
+}; // class OSThread
 } // namespace zz

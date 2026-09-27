@@ -5,23 +5,19 @@
 #include <link.h>
 #include <sys/mman.h>
 
-#include <string>
-#include <string.h>
-
-#include <vector>
-#include <algorithm>
-
 #define LINE_MAX 2048
 
 static bool memory_region_comparator(MemRange a, MemRange b) {
   return (a.start() < b.start());
 }
 
-stl::vector<MemRegion> regions;
-const stl::vector<MemRegion> &ProcessRuntime::getMemoryLayout() {
+std::vector<MemRegion> regions;
+
+const std::vector<MemRegion> &ProcessRuntime::getMemoryLayout() {
   regions.clear();
 
   FILE *fp = fopen("/proc/self/maps", "r");
+
   if (fp == nullptr)
     return regions;
 
@@ -34,6 +30,7 @@ const stl::vector<MemRegion> &ProcessRuntime::getMemoryLayout() {
       // Entry not describing executable data. Skip to end of line to set up
       // reading the next entry.
       int c;
+
       do {
         c = getc(fp);
       } while ((c != EOF) && (c != '\n'));
@@ -68,6 +65,7 @@ const stl::vector<MemRegion> &ProcessRuntime::getMemoryLayout() {
     }
 
     MemoryPermission permission;
+
     if (permissions[0] == 'r' && permissions[1] == 'w') {
       permission = MemoryPermission::kReadWrite;
     } else if (permissions[0] == 'r' && permissions[2] == 'x') {
@@ -85,19 +83,21 @@ const stl::vector<MemRegion> &ProcessRuntime::getMemoryLayout() {
     MemRegion region = MemRegion(region_start, region_end - region_start, permission);
     regions.push_back(region);
   }
+
   std::sort(regions.begin(), regions.end(), memory_region_comparator);
 
   fclose(fp);
   return regions;
 }
 
-static stl::vector<RuntimeModule> *modules;
-static stl::vector<RuntimeModule> &get_process_map_with_proc_maps() {
+static std::vector<RuntimeModule> *modules;
+static std::vector<RuntimeModule> &get_process_map_with_proc_maps() {
   if (modules == nullptr) {
-    modules = new stl::vector<RuntimeModule>();
+    modules = new std::vector<RuntimeModule>();
   }
 
   FILE *fp = fopen("/proc/self/maps", "r");
+
   if (fp == nullptr)
     return *modules;
 
@@ -110,6 +110,7 @@ static stl::vector<RuntimeModule> &get_process_map_with_proc_maps() {
       // Entry not describing executable data. Skip to end of line to set up
       // reading the next entry.
       int c;
+
       do {
         c = getc(fp);
       } while ((c != EOF) && (c != '\n'));
@@ -149,19 +150,23 @@ static stl::vector<RuntimeModule> &get_process_map_with_proc_maps() {
 
     // check elf magic number
     ElfW(Ehdr) *header = (ElfW(Ehdr) *)region_start;
+
     if (memcmp(header->e_ident, ELFMAG, SELFMAG) != 0) {
       continue;
     }
 
     char *path_buffer = line_buffer + path_index;
+
     if (*path_buffer == 0 || *path_buffer == '\n' || *path_buffer == '[')
       continue;
+
     RuntimeModule module;
 
     // strip
     if (path_buffer[strlen(path_buffer) - 1] == '\n') {
       path_buffer[strlen(path_buffer) - 1] = 0;
     }
+
     strncpy(module.path, path_buffer, sizeof(module.path) - 1);
     module.base = (void *)region_start;
     modules->push_back(module);
@@ -176,11 +181,12 @@ static stl::vector<RuntimeModule> &get_process_map_with_proc_maps() {
 }
 
 #if defined(__LP64__)
-static stl::vector<RuntimeModule> get_process_map_with_linker_iterator() {
-  stl::vector<RuntimeModule> ProcessModuleMap;
+static std::vector<RuntimeModule> get_process_map_with_linker_iterator() {
+  std::vector<RuntimeModule> ProcessModuleMap;
 
   static int (*dl_iterate_phdr_ptr)(int (*)(struct dl_phdr_info *, size_t, void *), void *);
   dl_iterate_phdr_ptr = (__typeof(dl_iterate_phdr_ptr))dlsym(RTLD_DEFAULT, "dl_iterate_phdr");
+
   if (dl_iterate_phdr_ptr == NULL) {
     return ProcessModuleMap;
   }
@@ -192,6 +198,7 @@ static stl::vector<RuntimeModule> get_process_map_with_linker_iterator() {
           strcpy(module.path, info->dlpi_name);
 
         module.base = (void *)info->dlpi_addr;
+
         for (size_t i = 0; i < info->dlpi_phnum; ++i) {
           if (info->dlpi_phdr[i].p_type == PT_LOAD) {
             uintptr_t load_bias = (info->dlpi_phdr[i].p_vaddr - info->dlpi_phdr[i].p_offset);
@@ -201,7 +208,7 @@ static stl::vector<RuntimeModule> get_process_map_with_linker_iterator() {
         }
 
         // push to vector
-        auto ProcessModuleMap = reinterpret_cast<stl::vector<RuntimeModule> *>(data);
+        auto ProcessModuleMap = reinterpret_cast<std::vector<RuntimeModule> *>(data);
         ProcessModuleMap->push_back(module);
         return 0;
       },
@@ -211,7 +218,7 @@ static stl::vector<RuntimeModule> get_process_map_with_linker_iterator() {
 }
 #endif
 
-const stl::vector<RuntimeModule> &ProcessRuntime::getModuleMap() {
+const std::vector<RuntimeModule> &ProcessRuntime::getModuleMap() {
 #if defined(__LP64__) && 0
   // TODO: won't resolve main binary
   return get_process_map_with_linker_iterator();
@@ -222,10 +229,12 @@ const stl::vector<RuntimeModule> &ProcessRuntime::getModuleMap() {
 
 RuntimeModule ProcessRuntime::getModule(const char *name) {
   auto modules = getModuleMap();
+
   for (auto module : modules) {
     if (strstr(module.path, name) != 0) {
       return module;
     }
   }
+
   return RuntimeModule{0};
 }
