@@ -17,20 +17,20 @@ struct Interceptor {
       bool arm_thumb_mode;
     } features;
 
-    addr_t fake_func_addr;
-    dobby_instrument_callback_t pre_handler;
-    dobby_instrument_callback_t post_handler;
+    addr_t fake_func_addr{};
+    dobby_instrument_callback_t pre_handler{};
+    dobby_instrument_callback_t post_handler{};
 
-    addr_t addr;
+    addr_t addr{};
 
-    MemBlock patched;
-    MemBlock relocated;
+    MemBlock patched{};
+    MemBlock relocated{};
 
-    InterceptRouting *routing;
+    InterceptRouting *routing{};
 
     uint8_t *origin_code_ = 0;
 
-    bool is_commited;
+    bool is_commited{};
 
     Entry(addr_t addr) {
       this->addr = addr;

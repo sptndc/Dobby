@@ -113,10 +113,10 @@ struct InterceptRouting {
       return;
     }
 
-    DEBUG_LOG("[x86 relo] origin: %p, size: %d", origin.addr(), origin.size);
+    DEBUG_LOG("origin: %p, size: %d", origin.addr(), origin.size);
     debug_hex_log_buffer((uint8_t *)origin.addr(), origin.size);
 
-    DEBUG_LOG("[x86 relo] relocated: %p, size: %d", relocated.addr(), relocated.size);
+    DEBUG_LOG("relocated: %p, size: %d", relocated.addr(), relocated.size);
     debug_hex_log_buffer((uint8_t *)relocated.addr(), relocated.size);
 
     entry->patched = origin;

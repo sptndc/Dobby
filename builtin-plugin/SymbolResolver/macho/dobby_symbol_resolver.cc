@@ -53,20 +53,24 @@ PUBLIC void *DobbySymbolResolver(const char *image_name, const char *symbol_name
 #if defined(__arm__) || defined(__aarch64__)
     static int shared_cache_ctx_init_once = 0;
     static shared_cache_ctx_t shared_cache_ctx;
+
     if (shared_cache_ctx_init_once == 0) {
       shared_cache_ctx_init_once = 1;
       shared_cache_ctx_init(&shared_cache_ctx);
       shared_cache_load_symbols(&shared_cache_ctx);
     }
+
     if (shared_cache_ctx.mmap_shared_cache) {
       // shared cache library
       if (shared_cache_is_contain(&shared_cache_ctx, (addr_t)header, 0)) {
         shared_cache_get_symbol_table(&shared_cache_ctx, header, &symtab, &symtab_count, &strtab);
       }
     }
+
     if (symtab && strtab) {
       result = macho_iterate_symbol_table((char *)symbol_name_pattern, symtab, symtab_count, strtab);
     }
+
     if (result) {
       result = result + shared_cache_ctx.runtime_slide;
       return (void *)result;
@@ -97,6 +101,7 @@ PUBLIC void *DobbySymbolResolver(const char *image_name, const char *symbol_name
     // get dyld load address
     const struct dyld_all_image_infos *infos =
         (struct dyld_all_image_infos *)(uintptr_t)task_dyld_info.all_image_info_addr;
+
     dyld_header = (mach_header_t *)infos->dyldImageLoadAddress;
     macho_ctx_t dyld_ctx(dyld_header);
     result = dyld_ctx.symbol_resolve(symbol_name_pattern);
@@ -106,6 +111,7 @@ PUBLIC void *DobbySymbolResolver(const char *image_name, const char *symbol_name
     if (!is_dyld_in_cache && result == 0) {
       result = macho_file_symbol_resolve(dyld_header->cputype, dyld_header->cpusubtype, "/usr/lib/dyld",
                                          (char *)symbol_name_pattern);
+
       result += (uintptr_t)dyld_header;
     }
   }
